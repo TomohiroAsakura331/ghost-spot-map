@@ -1,0 +1,157 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>既存スポット順位と未登録候補</title>
+<style>
+:root{--bg:#fcfcfb;--panel:rgba(252,252,251,.97);--ink:#0b0b0b;--ink2:#52514e;--line:#dcdbd5;--acc:#c4501f}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1a1a19;--panel:rgba(36,36,34,.97);--ink:#f0efec;--ink2:#c3c2b7;--line:#3a3a37;--acc:#f08a5d}}
+:root[data-theme="dark"]{--bg:#1a1a19;--panel:rgba(36,36,34,.97);--ink:#f0efec;--ink2:#c3c2b7;--line:#3a3a37;--acc:#f08a5d}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--ink);font-family:"Hiragino Sans","Noto Sans JP","Noto Sans CJK JP",sans-serif;font-size:13px}
+#map{position:absolute;inset:0}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px;box-shadow:0 2px 10px rgba(0,0,0,.08);z-index:2}
+#ctrl{top:12px;left:12px;width:286px;max-height:calc(100% - 40px);overflow:auto}
+#side{top:12px;right:12px;width:340px;max-height:calc(100% - 40px);display:flex;flex-direction:column}
+#sidebody{overflow:auto;flex:1}
+h1{font-size:15px;margin:0 0 4px} h2{font-size:12.5px;margin:12px 0 4px;color:var(--ink2);font-weight:600}
+.note{color:var(--ink2);font-size:11.5px;line-height:1.6}
+label{display:block;margin:3px 0;cursor:pointer} select,input[type=range]{width:100%}
+.seg{display:flex;gap:4px;flex-wrap:wrap}.seg button{flex:1;border:1px solid var(--line);background:transparent;color:var(--ink);border-radius:6px;padding:5px 4px;cursor:pointer;font-size:12px}
+.seg button.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.bar{height:12px;border-radius:3px;margin:4px 0} .ticks{display:flex;justify-content:space-between;font-size:11px;color:var(--ink2)}
+table{border-collapse:collapse;width:100%;font-size:12px} td{padding:3px 2px;border-bottom:1px solid var(--line);vertical-align:top} td:last-child{text-align:right}
+.li{padding:6px 4px;border-bottom:1px solid var(--line);cursor:pointer} .li:hover{background:rgba(196,80,31,.08)} .li b{font-size:12.5px}
+.rk{display:inline-block;min-width:34px;font-weight:700;color:var(--acc)}
+.big{font-size:20px;font-weight:700} .warn{color:#9a3412;font-size:11.5px}
+.att{position:absolute;left:310px;bottom:6px;font-size:10.5px;color:var(--ink2);z-index:2;background:var(--panel);padding:1px 6px;border-radius:4px}
+@media (max-width:760px){#ctrl{width:calc(100% - 50px);max-height:38%}#side{top:auto;bottom:12px;width:calc(100% - 50px);max-height:45%}.att{display:none}}
+</style></head><body>
+<div id="map"></div>
+<div class="panel" id="ctrl">
+<h1>既存スポット順位と未登録候補</h1>
+<div class="note">首都圏1都7県・1kmメッシュ。<b>A</b>＝空間交差検証で検証した掲載傾向モデル、<b>B</b>＝H1（仮説の向き・等重みの探索的立地条件）。AとBは混ぜていません。どちらも心霊体験の確率ではありません。</div>
+<h2>スコア</h2>
+<div class="seg" id="score"><button data-v="A" class="on">A 掲載傾向</button><button data-v="Ab">A 基準</button><button data-v="B">B 立地条件</button></div>
+<h2>表示</h2>
+<div class="seg" id="dim"><button data-v="3d" class="on">3D柱</button><button data-v="2d">2D色分け</button></div>
+<h2>高さの倍率（見やすさのためだけ）</h2><input type="range" id="hscale" min="5" max="120" value="40">
+<h2>スコア下限</h2><input type="range" id="thr" min="0" max="99" value="0"><div class="note" id="thrv">0（すべて）</div>
+<h2>都県・市区町村</h2>
+<select id="pref"><option value="-1">1都7県すべて</option></select>
+<select id="muni" style="margin-top:4px"><option value="">市区町村（すべて）</option></select>
+<h2>未登録の高スコア地域</h2>
+<select id="cset"><option value="0">① 首都圏全体でAが上位1%</option><option value="1">② 都県内でAが上位1%</option><option value="2">③ B（H1）が上位1%</option><option value="-1">表示しない</option></select>
+<h2>重ねる情報</h2>
+<label><input type="checkbox" id="sp0" checked> 既存スポット：具体的地点</label>
+<label><input type="checkbox" id="sp1"> 既存スポット：広域代表点</label>
+<label><input type="checkbox" id="basemap" checked> 背景地図（地理院タイル・要ネット）</label>
+<div id="legend"></div>
+</div>
+<div class="panel" id="side">
+<div class="seg" id="tab"><button data-v="spots" class="on">既存スポット順位</button><button data-v="cands">未登録候補</button><button data-v="info">詳細</button></div>
+<div id="sidebody" style="margin-top:8px"></div>
+</div>
+<div class="att">背景：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル</a>｜人口：令和2年国勢調査（e-Stat）加工｜道路：© OpenStreetMap contributors｜スポット：全国心霊マップ掲載情報を整理</div>
+<script>/*__DECK_BUNDLE__*/</script>
+<script>
+const DATA_B64="__DATA_B64__";
+(async function main(){
+async function loadData(){const bin=Uint8Array.from(atob(DATA_B64),c=>c.charCodeAt(0));const stream=new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip"));return await new Response(stream).json();}
+let P;try{P=await loadData();}catch(e){document.body.insertAdjacentHTML("beforeend",`<div style="position:absolute;top:40%;left:0;right:0;text-align:center">データを読み込めませんでした（ブラウザがgzip展開に未対応の可能性）：${e}</div>`);return;}
+const D=P.data,S=P.spots,CA=P.cands,L=P.lookup,B=P.bnd,F=P.facts;
+const n=D.code.length;
+function rect(c){const la=parseInt(c.slice(0,2))/1.5+parseInt(c[4])*5/60+parseInt(c[6])*30/3600,lo=parseInt(c.slice(2,4))+100+parseInt(c[5])*7.5/60+parseInt(c[7])*45/3600;return [[lo,la],[lo+45/3600,la],[lo+45/3600,la+30/3600],[lo,la+30/3600]];}
+const rows=[];for(let i=0;i<n;i++)rows.push({i,poly:rect(D.code[i])});const idxOf={};D.code.forEach((c,i)=>idxOf[c]=i);
+const st={score:'A',dim:'3d',hscale:40,thr:0,pref:-1,muni:'',cset:0,sp0:true,sp1:false,basemap:!/nobasemap/.test(location.search),tab:'spots',picked:null,pickedSpot:null};
+document.getElementById('basemap').checked=st.basemap;
+const ps=document.getElementById('pref');L.prefs.forEach((p,i)=>{const o=document.createElement('option');o.value=i;o.textContent=p;ps.appendChild(o);});
+const SEQ=[[255,243,232],[253,217,181],[253,183,122],[249,142,75],[232,96,44],[194,65,12],[138,44,13]];const SEQB=[[236,248,242],[196,232,214],[140,208,178],[80,178,138],[27,145,104],[13,110,77],[6,75,52]];
+function ramp(R,t){t=Math.max(0,Math.min(1,t));const x=t*(R.length-1),k=Math.floor(x),f=x-k,a=R[k],b=R[Math.min(k+1,R.length-1)];return [0,1,2].map(j=>Math.round(a[j]+(b[j]-a[j])*f));}
+function val(i){return st.score==='A'?D.A[i]:st.score==='Ab'?D.Ab[i]:D.B[i];}
+function muniOk(i){return !st.muni||L.munis[D.muni[i]]===st.muni;}
+function vis(r){const i=r.i,v=val(i);if(v==null)return false;if(st.pref>=0&&D.pref[i]!==st.pref)return false;if(!muniOk(i))return false;return v>=st.thr;}
+function color(r){const v=val(r.i);const c=ramp(st.score==='B'?SEQB:SEQ,v/100);return [...c,D.st[r.i]===1?150:235];}
+function elev(r){const v=val(r.i)||0;return Math.pow(v/100,3)*100*st.hscale;}
+function inCand(i){return st.cset>=0&&D.c[i][st.cset]>=0;}
+function spotOk(k){const t=S.type[k];if(t===0&&!st.sp0)return false;if(t!==0&&!st.sp1)return false;if(st.pref>=0&&S.pref[k]!==L.prefs[st.pref])return false;if(st.muni&&S.muni[k]!==st.muni)return false;return true;}
+function layers(){
+ const v=rows.filter(vis),Ls=[];
+ if(st.basemap)Ls.push(new deck.TileLayer({id:'gsi',data:'https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png',minZoom:5,maxZoom:18,tileSize:256,
+  renderSubLayers:p=>{const b=p.tile.boundingBox;return new deck.BitmapLayer(p,{data:null,image:p.data,bounds:[b[0][0],b[0][1],b[1][0],b[1][1]],opacity:.85});}}));
+ Ls.push(new deck.SolidPolygonLayer({id:'mesh',data:v,getPolygon:r=>r.poly,getFillColor:color,extruded:st.dim==='3d',getElevation:elev,pickable:true,
+  material:{ambient:.55,diffuse:.55,shininess:8},updateTriggers:{getFillColor:[st.score],getElevation:[st.score,st.hscale]}}));
+ const cv=st.cset>=0?rows.filter(r=>inCand(r.i)&&(st.pref<0||D.pref[r.i]===st.pref)&&muniOk(r.i)):[];
+ Ls.push(new deck.PathLayer({id:'cand',data:cv,getPath:r=>[...r.poly,r.poly[0]].map(p=>[p[0],p[1],st.dim==='3d'?elev(r)+40:0]),getColor:[98,80,214,255],widthMinPixels:2.2,pickable:false,
+  updateTriggers:{getPath:[st.dim,st.hscale,st.score]}}));
+ Ls.push(new deck.GeoJsonLayer({id:'bnd',data:B,stroked:true,filled:false,getLineColor:[60,60,60,200],lineWidthMinPixels:1.2}));
+ const si=[];for(let k=0;k<S.lon.length;k++)if(spotOk(k))si.push(k);
+ Ls.push(new deck.ScatterplotLayer({id:'spots',data:si,getPosition:k=>{const i=idxOf[S.mesh[k]];return [S.lon[k],S.lat[k],st.dim==='3d'&&i!==undefined?elev(rows[i])+150:0];},
+  getRadius:k=>{const r=st.score==='B'?S.rB[k]:S.rA[k];return r&&r<=50?420:220;},radiusMinPixels:2.6,
+  getFillColor:k=>{const r=st.score==='B'?S.rB[k]:S.rA[k];return S.type[k]!==0?[60,140,200,210]:(r&&r<=50?[11,11,11,240]:[42,120,214,230]);},
+  radiusMaxPixels:11,stroked:true,getLineColor:[255,255,255,230],lineWidthMinPixels:1,pickable:true,updateTriggers:{getPosition:[st.dim,st.hscale,st.score],getRadius:[st.score],getFillColor:[st.score]}}));
+ if(st.picked!==null){const r=rows[st.picked];Ls.push(new deck.PathLayer({id:'pick',data:[r],getPath:x=>[...x.poly,x.poly[0]].map(p=>[p[0],p[1],st.dim==='3d'?elev(x)+60:0]),getColor:[11,11,11],widthMinPixels:3.5}));}
+ return Ls;}
+let vs={longitude:139.55,latitude:35.95,zoom:7.4,pitch:45,bearing:-12};
+const dg=new deck.DeckGL({container:'map',initialViewState:vs,controller:true,layers:[],onViewStateChange:({viewState})=>{vs=viewState;return viewState;},
+ getTooltip:({object,layer})=>{if(object==null||!layer)return null;if(layer.id==='spots'){const k=object;return {html:`<b>${esc(S.name[k])}</b><br>${esc(S.genre[k])}｜A順位 ${S.rA[k]??'—'}｜B順位 ${S.rB[k]??'—'}`};}
+  if(layer.id==='mesh'){const i=object.i;return {html:`${esc(L.munis[D.muni[i]])}<br>A ${D.A[i]}／B ${D.B[i]??'—'}`};}return null;}});
+function esc(s){return String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function fly(lon,lat,z){dg.setProps({initialViewState:{...vs,longitude:lon,latitude:lat,zoom:z||11,transitionDuration:800}});}
+function render(){dg.setProps({layers:layers()});legend();side();}
+function fmtD(v){return v==null?'—':(v>=1000?(v/1000).toFixed(1)+' km':Math.round(v)+' m');}
+function meshTable(i){const t3=D.t3[i].map((g,j)=>D.t3v[i][j]!=null&&D.t3v[i][j]>0.15?`${L.groups[g]}（+${D.t3v[i][j]}）`:null).filter(Boolean).join('、')||'—';
+ return `<table><tr><td>A 掲載傾向（環境追加）</td><td><b>${D.A[i]}</b></td></tr><tr><td>A 都県内の順位</td><td>${D.Aw[i]??'—'}</td></tr><tr><td>A 基準モデル</td><td>${D.Ab[i]}</td></tr><tr><td>B 立地条件（H1）</td><td>${D.B[i]??'—'}</td></tr></table>
+ <div class="note">Aを押し上げた主な要因：${esc(t3)}</div>
+ <h2>立地情報（1kmメッシュ）</h2><table><tr><td>人口密度</td><td>${D.pop[i]==null?'表に行なし':D.pop[i].toLocaleString()+' 人/km²'}</td></tr><tr><td>自動車道路の登録密度</td><td>${D.road[i]} km/km²</td></tr>
+ <tr><td>標高／傾斜</td><td>${D.elev[i]} m／${D.slope[i]} 度</td></tr><tr><td>森林割合</td><td>${D.forest[i]} %</td></tr><tr><td>地形遮蔽角</td><td>${D.hor[i]} 度</td></tr><tr><td>1月平均気温</td><td>${D.tj[i]} ℃</td></tr>
+ <tr><td>人口重心まで</td><td>${fmtD(D.popc[i])}</td></tr><tr><td>病院・診療所まで</td><td>${fmtD(D.med[i])}</td></tr><tr><td>墓地まで</td><td>${fmtD(D.cem[i])}</td></tr><tr><td>水域まで</td><td>${fmtD(D.wat[i])}</td></tr><tr><td>トンネルまで</td><td>${fmtD(D.tun[i])}</td></tr><tr><td>橋・高架まで</td><td>${fmtD(D.bri[i])}</td></tr></table>`;}
+function infoMesh(i){const gl=['一般区画（掲載記録なし）','掲載区画（具体的地点）','保留区画（広域代表点など）'][D.g[i]];
+ const cs=D.c[i].map((a,k)=>a>=0?`${L.sets[k]} 第${CA[L.sets[k]].rank[a]}地域（${CA[L.sets[k]].id[a]}）`:null).filter(Boolean).join('<br>');
+ return `<div class="note">${esc(L.prefs[D.pref[i]])} ${esc(L.munis[D.muni[i]])}｜メッシュ ${D.code[i]}｜${gl}</div>${cs?`<div class="note" style="color:#6250d6">未登録候補：${cs}</div>`:''}
+ <div class="note">${D.st[i]===0?'Aは空間交差検証の予測':'Aは学習に使っていない保留区画への予測'}</div>${meshTable(i)}`;}
+function infoSpot(k){const i=idxOf[S.mesh[k]];
+ return `<div class="big" style="font-size:16px">${esc(S.name[k])}</div><div class="note">${esc(S.genre[k])}｜${esc(L.types[S.type[k]])}<br>${esc(S.addr[k])}</div>
+ <table><tr><td>A 順位（掲載傾向）</td><td><b>${S.rA[k]??'—'}</b>${S.rAlo[k]!=null?`（分け方で ${S.rAlo[k]}〜${S.rAhi[k]}位）`:''}</td></tr><tr><td>A スコア／周辺9メッシュ平均</td><td>${S.A[k]??'—'}／${S.An[k]??'—'}</td></tr>
+ <tr><td>B 順位（H1立地条件）</td><td><b>${S.rB[k]??'—'}</b></td></tr><tr><td>B スコア（重み45通りの範囲）</td><td>${S.B[k]??'—'}${S.Blo[k]!=null?`（${S.Blo[k]}〜${S.Bhi[k]}）`:''}</td></tr><tr><td>B 周辺9メッシュ平均</td><td>${S.Bn[k]??'—'}</td></tr></table>
+ <h2>高評価の主な要因</h2><div class="note">A：${esc(S.fA[k]||'—')}${S.fAl[k]?`<br>Aを下げた要因：${esc(S.fAl[k])}`:''}<br>B：${esc(S.fB[k]||'—')}${S.aux[k]?`<br>補助記録：${esc(S.aux[k])}`:''}</div>
+ ${S.cav[k]?`<h2>評価上の注意</h2><div class="warn">${esc(S.cav[k]).replace(/／/g,'<br>')}</div>`:''}
+ ${S.url[k]?`<div class="note" style="margin-top:6px"><a href="${esc(S.url[k])}" target="_blank" rel="noopener">掲載元ページ</a></div>`:''}
+ ${i!==undefined?'<h2>この1kmメッシュ</h2>'+meshTable(i):''}`;}
+function infoCand(s,a){const c=CA[s];
+ return `<div class="big" style="font-size:16px">${esc(s)} 第${c.rank[a]}地域</div><div class="note">${esc(c.pref[a])} ${esc(c.muni[a])}｜${c.n[a]}区画｜頂点メッシュ ${c.mesh[a]}</div>
+ <table><tr><td>頂点のスコア</td><td><b>${c.score[a]}</b></td></tr><tr><td>A（全域）／A（都県内）</td><td>${c.A[a]}／${c.Aw[a]}</td></tr><tr><td>B（H1）</td><td>${c.B[a]??'—'}</td></tr><tr><td>A 分け方3通りの範囲</td><td>${c.lo[a]}〜${c.hi[a]}</td></tr>
+ <tr><td>最寄りの既存スポット</td><td>${esc(c.near[a])}（${c.nearkm[a]} km）</td></tr></table>
+ <h2>主な立地要因</h2><div class="note">A：${esc(c.fA[a]||'—')}<br>B：${esc(c.fB[a]||'—')}</div>
+ <h2>立地が似ている既存スポットの区画</h2><div class="note">${esc(c.sim[a])}</div>
+ <h2>未登録と判断した根拠</h2><div class="note">候補地域のどの区画にも、結合済みの掲載記録（2,133件）がない。座標のない17件は位置不明。未登録＝心霊スポットがない、ではない。</div>
+ ${c.unc[a]?`<h2>不確実性</h2><div class="warn">${esc(c.unc[a]).replace(/／/g,'<br>')}</div>`:''}`;}
+function side(){const b=document.getElementById('sidebody');document.querySelectorAll('#tab button').forEach(x=>x.classList.toggle('on',x.dataset.v===st.tab));
+ if(st.tab==='info'){if(st.pickedSpot!==null)b.innerHTML=infoSpot(st.pickedSpot);else if(st.pickedCand)b.innerHTML=infoCand(...st.pickedCand);else if(st.picked!==null)b.innerHTML=infoMesh(st.picked);else b.innerHTML='<div class="note">地図の区画・地点、または一覧をクリックすると詳細を表示します。</div>';return;}
+ if(st.tab==='spots'){const key=st.score==='B'?'rB':'rA';const ks=[];for(let k=0;k<S.lon.length;k++){if(S.type[k]!==0||S[key][k]==null)continue;if(st.pref>=0&&S.pref[k]!==L.prefs[st.pref])continue;if(st.muni&&S.muni[k]!==st.muni)continue;ks.push(k);}
+  ks.sort((a,c)=>S[key][a]-S[key][c]);
+  b.innerHTML=`<div class="note">具体的地点 ${ks.length}件を${st.score==='B'?'B（H1立地条件）':'A（掲載傾向）'}の順に表示（同じメッシュは同点）。</div>`+ks.slice(0,60).map(k=>`<div class="li" data-k="${k}"><span class="rk">${S[key][k]}</span><b>${esc(S.name[k])}</b><br><span class="note">${esc(S.genre[k])}｜${esc(S.muni[k])}｜A ${S.A[k]??'—'}／B ${S.B[k]??'—'}</span></div>`).join('');
+  b.querySelectorAll('.li').forEach(e=>e.onclick=()=>{const k=+e.dataset.k;st.pickedSpot=k;st.pickedCand=null;st.picked=idxOf[S.mesh[k]]??null;st.tab='info';fly(S.lon[k],S.lat[k],12);render();});return;}
+ if(st.cset<0){b.innerHTML='<div class="note">左の「未登録の高スコア地域」で一覧を選んでください。</div>';return;}
+ const s=L.sets[st.cset],c=CA[s],as=[];for(let a=0;a<c.rank.length;a++){if(st.pref>=0&&!c.pref[a].includes(L.prefs[st.pref]))continue;if(st.muni&&!c.muni[a].includes(st.muni))continue;as.push(a);}
+ b.innerHTML=`<div class="note">${esc(s)}：${as.length}地域（隣接する高スコア区画をまとめた単位）。未登録＝心霊スポットがない、ではありません。</div>`+as.slice(0,60).map(a=>`<div class="li" data-a="${a}"><span class="rk">${c.rank[a]}</span><b>${esc(c.muni[a])}</b>（${esc(c.pref[a])}）<br><span class="note">${c.n[a]}区画｜頂点 ${c.score[a]}｜最寄りスポット ${c.nearkm[a]}km</span></div>`).join('');
+ b.querySelectorAll('.li').forEach(e=>e.onclick=()=>{const a=+e.dataset.a;st.pickedCand=[s,a];st.pickedSpot=null;st.picked=idxOf[c.mesh[a]]??null;st.tab='info';fly(c.lon[a],c.lat[a],12);render();});}
+function legend(){const R=st.score==='B'?SEQB:SEQ;document.getElementById('legend').innerHTML=`<h2>凡例</h2><b>${st.score==='B'?'B 立地条件スコア（H1、順位0–100）':'A 掲載傾向スコア（順位0–100）'}</b><div class="bar" style="background:linear-gradient(90deg,${R.map(c=>`rgb(${c})`).join(',')})"></div><div class="ticks"><span>0</span><span>50</span><span>100</span></div>
+ <div class="note">柱の高さ＝スコアの3乗×倍率（上位を強調）。<b>見やすさのための表示</b>で、標高・確率ではありません。<br><span style="color:#0b0b0b">●</span> 上位50位の具体的地点 <span style="color:#2a78d6">●</span> その他の具体的地点 <span style="color:#3c8cc8">●</span> 広域代表点<br><span style="color:#6250d6">□</span> 未登録の高スコア地域<br>掲載区画の判別（AUC）：A ${F.aucA.toFixed(3)}／B ${F.aucB.toFixed(3)}</div>`;}
+function segs(id,key,cb){document.querySelectorAll('#'+id+' button').forEach(b=>b.onclick=()=>{document.querySelectorAll('#'+id+' button').forEach(x=>x.classList.remove('on'));b.classList.add('on');st[key]=b.dataset.v;cb&&cb(b.dataset.v);render();});}
+segs('score','score');segs('dim','dim',v=>dg.setProps({initialViewState:{...vs,pitch:v==='3d'?45:0,bearing:v==='3d'?-12:0,transitionDuration:600}}));segs('tab','tab');
+document.getElementById('hscale').oninput=e=>{st.hscale=+e.target.value;render();};
+document.getElementById('thr').oninput=e=>{st.thr=+e.target.value;document.getElementById('thrv').textContent=st.thr===0?'0（すべて）':`${st.thr} 以上`;render();};
+const ms=document.getElementById('muni');
+function fillMuni(){const set=new Set();for(let i=0;i<n;i++)if(st.pref<0||D.pref[i]===st.pref)set.add(L.munis[D.muni[i]]);ms.innerHTML='<option value="">市区町村（すべて）</option>'+[...set].sort().map(m=>`<option>${esc(m)}</option>`).join('');}
+function fitTo(f){let x0=999,x1=-999,y0=999,y1=-999,c=0;rows.forEach(r=>{if(f(r.i)){const p=r.poly[0];x0=Math.min(x0,p[0]);x1=Math.max(x1,p[0]);y0=Math.min(y0,p[1]);y1=Math.max(y1,p[1]);c++;}});
+ if(!c)return;const z=Math.min(11,Math.log2(360/Math.max(x1-x0+.02,(y1-y0+.02)*1.25))+0.6);dg.setProps({initialViewState:{...vs,longitude:(x0+x1)/2,latitude:(y0+y1)/2,zoom:z,transitionDuration:700}});}
+ps.onchange=e=>{st.pref=+e.target.value;st.muni='';fillMuni();if(st.pref>=0)fitTo(i=>D.pref[i]===st.pref);render();};
+ms.onchange=e=>{st.muni=e.target.value;if(st.muni)fitTo(i=>L.munis[D.muni[i]]===st.muni);render();};
+document.getElementById('cset').onchange=e=>{st.cset=+e.target.value;if(st.tab!=='info')st.tab='cands';render();};
+['sp0','sp1','basemap'].forEach(k=>document.getElementById(k).onchange=e=>{st[k]=e.target.checked;render();});
+(function(){const el=document.getElementById('map');let d0=null;el.addEventListener('pointerdown',e=>{d0=[e.clientX,e.clientY];});
+ el.addEventListener('pointerup',e=>{if(!d0)return;const mv=Math.hypot(e.clientX-d0[0],e.clientY-d0[1]);d0=null;if(mv>5)return;const r=el.getBoundingClientRect();
+  const info=dg.pickObject({x:e.clientX-r.left,y:e.clientY-r.top,radius:3});if(!info||!info.layer)return;
+  if(info.layer.id==='spots'){const k=info.object;st.pickedSpot=k;st.pickedCand=null;st.picked=idxOf[S.mesh[k]]??null;}
+  else if(info.layer.id==='mesh'){st.picked=info.object.i;st.pickedSpot=null;const a=st.cset>=0?D.c[st.picked][st.cset]:-1;st.pickedCand=a>=0?[L.sets[st.cset],a]:null;}
+  st.tab='info';render();});})();
+fillMuni();render();
+})();
+</script></body></html>
