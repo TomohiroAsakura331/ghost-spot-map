@@ -1,0 +1,393 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>E56 3D環境スコアマップ</title>
+<style>
+:root{--bg:#0a0e14;--panel:rgba(14,20,29,.9);--line:rgba(160,180,200,.24);--text:#e6edf3;--muted:#9fb0c0;--accent:#6ab0ff}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg);color:var(--text);font:13px/1.55 -apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Noto Sans CJK JP","Yu Gothic",Meiryo,sans-serif}
+#app{position:relative;width:100%;height:100%;overflow:hidden}
+#view{position:absolute;inset:0}#view canvas{display:block;outline:none}
+.panel{position:absolute;background:var(--panel);border:1px solid var(--line);border-radius:10px}
+#banner{top:8px;left:50%;transform:translateX(-50%);max-width:min(820px,calc(100% - 20px));padding:6px 14px;font-size:12px;text-align:center;color:#ffe2b8;border-color:rgba(255,179,71,.45);z-index:4}
+#controls{top:52px;left:10px;width:272px;max-height:calc(100% - 62px);overflow:auto;padding:10px 12px;z-index:3}
+#controls h2,#info h2{font-size:13px;margin:0 0 6px;color:var(--accent)}
+.row{margin:8px 0}.row>label.t{display:block;color:var(--muted);font-size:12px;margin-bottom:3px}
+.seg{display:flex;border:1px solid var(--line);border-radius:7px;overflow:hidden}
+.seg button{flex:1;background:transparent;color:var(--text);border:0;padding:5px 3px;font:inherit;font-size:12px;cursor:pointer}
+.seg button+button{border-left:1px solid var(--line)}.seg button.on{background:var(--accent);color:#06121f;font-weight:700}
+select,input[type=search]{width:100%;background:#121a25;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 6px;font:inherit}
+input[type=range]{width:100%;accent-color:#6ab0ff}.val{float:right;font-variant-numeric:tabular-nums}
+.chk{display:flex;align-items:center;gap:6px;margin:3px 0;cursor:pointer}
+.btns{display:flex;gap:5px;flex-wrap:wrap}.btns button,.btn{background:#162232;color:var(--text);border:1px solid var(--line);border-radius:6px;padding:3px 8px;font:inherit;font-size:12px;cursor:pointer}
+.btns button:hover,.btn:hover{border-color:var(--accent)}
+#info{top:52px;right:10px;width:340px;max-height:calc(100% - 62px);z-index:3;overflow:auto;padding:10px 12px}
+#info table{width:100%;border-collapse:collapse;font-size:12px}#info td{padding:2px 4px;border-bottom:1px solid rgba(160,180,200,.14);vertical-align:top}
+#info td:first-child{color:var(--muted);white-space:nowrap;width:40%}
+.k{color:var(--muted)}.warn{color:#ffc58a;font-size:12px}
+.cbar{display:grid;grid-template-columns:112px 1fr 42px;gap:2px 6px;align-items:center;font-size:11px;margin:2px 0}
+.cbar .z{position:relative;height:8px;background:rgba(255,255,255,.07);border-radius:2px}.cbar .z i{position:absolute;top:0;bottom:0;border-radius:2px}
+.cbar .z b{position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:#8796a5}
+#legend{left:292px;right:360px;bottom:10px;padding:7px 12px;font-size:12px;z-index:3}
+.sw{display:inline-block;width:11px;height:11px;border-radius:2px;vertical-align:-1px;margin-right:4px}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;vertical-align:0;margin-right:4px}
+#tip{position:absolute;pointer-events:none;z-index:20;background:rgba(6,9,14,.94);border:1px solid rgba(106,176,255,.5);border-radius:8px;padding:6px 9px;font-size:12px;max-width:300px;display:none}
+#attr{position:absolute;right:8px;bottom:4px;font-size:10px;color:#8796a5;z-index:3}#attr a{color:#8796a5}
+#loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--muted);background:var(--bg);z-index:50}
+.lbl{position:absolute;pointer-events:none;font-size:12px;font-weight:700;color:#fff;text-shadow:0 0 3px #000,0 0 6px #000;transform:translate(-50%,-50%);white-space:nowrap;opacity:.85}
+#lbls{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+#search-res{list-style:none;margin:3px 0 0;padding:0;max-height:150px;overflow:auto;background:#0f1620;border-radius:6px}
+#search-res li{padding:3px 7px;cursor:pointer;font-size:12px}#search-res li:hover{background:#1c2a3b}
+.hidden{display:none!important}a{color:#7fc3ff}
+#top li{cursor:pointer;margin:2px 0}#top li:hover{color:var(--accent)}#top{padding-left:20px;margin:4px 0}
+@media (max-width:860px){#info{top:auto;bottom:10px;right:10px;left:10px;width:auto;max-height:36%}#controls{width:230px;max-height:50%}#legend{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+ <div id="view"></div><div id="lbls"></div>
+ <div id="loading">3D地図データを読み込み中…</div>
+ <div id="banner" class="panel">高さ＝<b>E56の環境評価値</b>（心霊スポット掲載傾向に関連する環境要因の評価）。実際の標高・心霊現象の強さ・霊の存在範囲ではありません。</div>
+ <div id="controls" class="panel">
+  <h2>表示設定</h2>
+  <div class="row"><label class="t">表示方式</label>
+   <div class="seg" id="mode"><button data-v="column" class="on">3Dメッシュ（柱）</button><button data-v="surface">3D曲面</button></div>
+   <div class="k" id="modeNote" style="font-size:11px;margin-top:3px"></div></div>
+  <div class="row" id="rowRes"><label class="t">柱の解像度</label>
+   <div class="seg" id="res"><button data-v="1" class="on">1km（元データ）</button><button data-v="2">2km（表示用に集約）</button></div></div>
+  <div class="row hidden" id="rowSmooth"><label class="t">曲面の平滑化 <span class="val" id="vSm">2</span></label>
+   <input type="range" id="sm" min="0" max="6" step="1" value="2">
+   <div class="k" style="font-size:11px">0＝隣接4区画の平均のみ。1回ごとに隣の頂点と平均（データのない所へは広げない）。</div></div>
+  <div class="row"><label class="t">高さの倍率</label>
+   <div class="seg" id="mulb"><button data-v="1">1×</button><button data-v="2" class="on">2×</button><button data-v="5">5×</button><button data-v="10">10×</button></div></div>
+  <div class="row"><label class="t">高低差の強調（指数） <span class="val" id="vGam">3.0</span></label>
+   <input type="range" id="gam" min="1" max="5" step="0.5" value="3">
+   <div class="k" style="font-size:11px">高さ＝(E56スコア/100)<sup>指数</sup>×倍率。1＝スコアに比例。</div></div>
+  <div class="row"><label class="t">高さに使う値</label>
+   <select id="hval"><option value="e56">E56スコア（STEP 5.6）</option><option value="e55">参考：E55スコア（STEP 5.5、比較用）</option></select></div>
+  <div class="row"><label class="t">色</label>
+   <select id="cmode"><option value="e56">E56スコア</option><option value="k5">安定度（23条件で上位5%の数）</option><option value="cls">スコア×安定度の区分</option></select></div>
+  <div class="row"><label class="t">重ねるレイヤー</label>
+   <label class="chk"><input type="checkbox" id="spOn" checked>既存心霊スポット（具体的地点）</label>
+   <label class="chk"><input type="checkbox" id="spBroad">広域代表点のスポット（位置精度低）</label>
+   <label class="chk"><input type="checkbox" id="cOn" checked>安定上位の未登録候補（411区画）</label>
+   <label class="chk"><input type="checkbox" id="c1On">E56上位1%の未登録区画</label>
+   <label class="chk"><input type="checkbox" id="border" checked>都県境</label>
+   <label class="chk"><input type="checkbox" id="labels" checked>都県名</label></div>
+  <div class="row"><label class="t">スポット検索</label><input type="search" id="q" placeholder="スポット名・市区町村"><ul id="search-res"></ul></div>
+  <div class="row"><label class="t">地域を拡大</label><select id="region"></select></div>
+  <div class="row"><label class="t">視点</label>
+   <div class="btns"><button data-view="oblique">斜め</button><button data-view="low">低い視点</button><button data-view="top">真上</button><button data-view="reset">リセット</button></div></div>
+  <div class="row"><label class="t">背景地図</label>
+   <select id="base"><option value="none">なし</option><option value="dark">暗色（CARTO）</option><option value="pale">淡色（地理院タイル）</option></select></div>
+  <div class="row"><label class="chk"><input type="checkbox" id="rot">自動回転</label><button class="btn" id="shot">画像として保存（PNG）</button></div>
+  <div class="row k" style="font-size:11px">操作：左ドラッグ＝回転／右ドラッグ・Shift＋ドラッグ＝移動／ホイール＝拡大縮小／クリック＝詳細を固定</div>
+ </div>
+ <div id="info" class="panel"></div>
+ <div id="legend" class="panel"></div>
+ <div id="tip"></div><div id="attr"></div>
+</div>
+<script>/*__THREE_BUNDLE__*/</script>
+<script>
+"use strict";
+const DATA_B64 = "__DATA_B64__";
+(async function main(){
+const THREE = window.THREE, OrbitControls = window.OrbitControls;
+const $ = id => document.getElementById(id);
+async function loadData(){ const bin=Uint8Array.from(atob(DATA_B64),c=>c.charCodeAt(0)); const s=new Blob([bin]).stream().pipeThrough(new DecompressionStream("gzip")); return await new Response(s).json(); }
+let P; try{ P = await loadData(); }catch(e){ $("loading").textContent="データを読み込めませんでした: "+e; return; }
+const M=P.mesh, SP=P.spots, MT=P.meta, NC=MT.n_cond; const N=M.code.length;
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const v3=(x,d=2)=>x==null?"—":(x/1000).toFixed(d);
+
+/* 座標：Web メルカトル（1単位＝1km、経度139.6・緯度36.0を原点）。メッシュの四隅は緯度経度から正確に計算 */
+const R=6378.137, DEG=Math.PI/180, LON0=139.6, LAT0=36.0;
+const mx = lon => R*(lon-LON0)*DEG;
+const mercY = lat => R*Math.log(Math.tan(Math.PI/4 + lat*DEG/2)); const Y0=mercY(LAT0);
+const mz = lat => -(mercY(lat)-Y0);
+const H0 = 6;   // E56スコア100・指数1・倍率1×の高さ（表示単位≒km）
+const ROW=new Int32Array(N), COL=new Int32Array(N);
+for(let i=0;i<N;i++){ const c=M.code[i]; ROW[i]=parseInt(c.slice(0,2))*80+parseInt(c[4])*10+parseInt(c[6]); COL[i]=parseInt(c.slice(2,4))*80+parseInt(c[5])*10+parseInt(c[7]); }
+const cellKey=(r,c)=>r*20000+c; const cellIndex=new Map(); for(let i=0;i<N;i++) cellIndex.set(cellKey(ROW[i],COL[i]),i);
+const cx0=c=>mx(100+c/80), cz0=r=>mz(r/120);
+const SCORE=new Float32Array(N); function setScore(key){ for(let i=0;i<N;i++) SCORE[i]=(M[key][i]==null?0:M[key][i])/1000; agg=null; }
+/* 頂点格子 */
+const vIndex=new Map(), vRow=[], vCol=[];
+for(let i=0;i<N;i++) for(const [dr,dc] of [[0,0],[1,0],[0,1],[1,1]]){ const k=cellKey(ROW[i]+dr,COL[i]+dc); if(!vIndex.has(k)){ vIndex.set(k,vRow.length); vRow.push(ROW[i]+dr); vCol.push(COL[i]+dc);} }
+const NV=vRow.length, VX=new Float32Array(NV), VZ=new Float32Array(NV);
+for(let v=0;v<NV;v++){ VX[v]=cx0(vCol[v]); VZ[v]=cz0(vRow[v]); }
+const vNb=new Int32Array(NV*4).fill(-1);
+for(let v=0;v<NV;v++){ [[0,1],[0,-1],[1,0],[-1,0]].forEach(([dr,dc],j)=>{ const k=vIndex.get(cellKey(vRow[v]+dr,vCol[v]+dc)); if(k!==undefined) vNb[v*4+j]=k; }); }
+const cellV=new Int32Array(N*4);
+for(let i=0;i<N;i++){ cellV[i*4]=vIndex.get(cellKey(ROW[i],COL[i])); cellV[i*4+1]=vIndex.get(cellKey(ROW[i]+1,COL[i])); cellV[i*4+2]=vIndex.get(cellKey(ROW[i],COL[i]+1)); cellV[i*4+3]=vIndex.get(cellKey(ROW[i]+1,COL[i]+1)); }
+/* 頂点に接する区画（局所最大の上限に使う） */
+const vCells=Array.from({length:NV},()=>[]); for(let i=0;i<N;i++) for(let j=0;j<4;j++) vCells[cellV[i*4+j]].push(i);
+
+let agg=null;
+const S={hval:"e56",mode:"column",res:1,sm:2,mul:2,gam:3,cmode:"e56",spOn:true,spBroad:false,cOn:true,c1On:false,border:true,labels:true,base:"none",rot:false};
+
+/* 色 */
+const SEQ=[[226,226,220],[190,214,245],[130,178,236],[80,140,222],[36,98,200],[255,196,70]], BINS=[50,80,90,95,99];
+const SEQL=['下位50%','50〜80%','80〜90%','90〜95%','上位5%（95〜99%）','上位1%'];
+const binOf=v=>{let k=0;while(k<BINS.length&&v>=BINS[k])k++;return k;};
+const KC=[[70,78,90],[60,110,90],[70,150,110],[110,190,130],[160,225,150],[230,250,170]], KB=[1,6,12,19,23], KL=['0/23','1〜5','6〜11','12〜18','19〜22','23/23'];
+const kbin=k=>{let b=0;while(b<KB.length&&k>=KB[b])b++;return b;};
+const CLS=[[255,90,70],[255,165,60],[245,215,90],[120,150,200],[70,78,90]];
+const CLSL=['上位5%かつ安定度19/23以上','上位5%・安定度12〜18','上位5%・安定度11以下','E56 90〜95%','その他'];
+function clsOf(i){ const e=M.e56[i]/1000,k=M.k5[i]; if(e>=95) return k>=19?0:(k>=12?1:2); if(e>=90) return 3; return 4; }
+function cellRGB(i){ if(S.cmode==="k5") return KC[kbin(M.k5[i])]; if(S.cmode==="cls") return CLS[clsOf(i)]; return SEQ[binOf(SCORE[i])]; }
+const srgb=c=>new THREE.Color().setRGB(c[0]/255,c[1]/255,c[2]/255,THREE.SRGBColorSpace);
+
+/* three.js */
+const view=$("view");
+const renderer=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2)); renderer.outputColorSpace=THREE.SRGBColorSpace; view.appendChild(renderer.domElement);
+const scene=new THREE.Scene(); scene.background=new THREE.Color(0x0a0e14);
+const camera=new THREE.PerspectiveCamera(38,1,0.5,30000);
+const controls=new OrbitControls(camera,renderer.domElement);
+controls.enableDamping=true; controls.dampingFactor=0.12; controls.screenSpacePanning=false; controls.maxPolarAngle=88*DEG; controls.minDistance=4; controls.maxDistance=6000; controls.autoRotateSpeed=0.6;
+scene.add(new THREE.HemisphereLight(0xdfe8ff,0x1a1410,1.05));
+const sun=new THREE.DirectionalLight(0xffffff,1.6); sun.position.set(-300,420,200); scene.add(sun);
+const sun2=new THREE.DirectionalLight(0xffd6a0,0.35); sun2.position.set(250,120,-300); scene.add(sun2);
+const world=new THREE.Group(); scene.add(world); const scaled=new THREE.Group(); world.add(scaled);
+
+/* 背景地図 */
+const baseGroup=new THREE.Group(); baseGroup.position.y=-0.4; world.add(baseGroup);
+const BASES={dark:{url:(z,x,y)=>`https://basemaps.cartocdn.com/dark_all/${z}/${x}/${y}.png`,attr:'背景地図 © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors © <a href="https://carto.com/attributions" target="_blank" rel="noopener">CARTO</a>'},
+ pale:{url:(z,x,y)=>`https://cyberjapandata.gsi.go.jp/xyz/pale/${z}/${x}/${y}.png`,attr:'背景地図：<a href="https://maps.gsi.go.jp/development/ichiran.html" target="_blank" rel="noopener">地理院タイル（淡色地図）</a>'}};
+const tile2lon=(x,z)=>x/2**z*360-180, tile2lat=(y,z)=>Math.atan(Math.sinh(Math.PI*(1-2*y/2**z)))/DEG;
+const lon2tile=(lon,z)=>Math.floor((lon+180)/360*2**z), lat2tile=(lat,z)=>Math.floor((1-Math.log(Math.tan(lat*DEG)+1/Math.cos(lat*DEG))/Math.PI)/2*2**z);
+const texLoader=new THREE.TextureLoader(); texLoader.setCrossOrigin("anonymous"); let tileFail=0,tileOk=0;
+function loadBase(){ baseGroup.children.slice().forEach(m=>{baseGroup.remove(m);m.geometry.dispose();if(m.material.map)m.material.map.dispose();m.material.dispose();});
+ tileFail=0;tileOk=0;updateAttr(); if(S.base==="none") return; const B=BASES[S.base]; const A={z:9,w:138.2,e:141.2,s:34.75,n:37.4};
+ for(let x=lon2tile(A.w,A.z);x<=lon2tile(A.e,A.z);x++) for(let y=lat2tile(A.n,A.z);y<=lat2tile(A.s,A.z);y++){
+  const x0=mx(tile2lon(x,A.z)),x1=mx(tile2lon(x+1,A.z)),z0=mz(tile2lat(y,A.z)),z1=mz(tile2lat(y+1,A.z));
+  const geo=new THREE.PlaneGeometry(x1-x0,z1-z0); geo.rotateX(-Math.PI/2);
+  const mat=new THREE.MeshBasicMaterial({color:S.base==="pale"?0x8a8f96:0xffffff,transparent:true,opacity:0});
+  const m=new THREE.Mesh(geo,mat); m.position.set((x0+x1)/2,0,(z0+z1)/2); baseGroup.add(m); const want=S.base;
+  texLoader.load(B.url(A.z,x,y),tex=>{if(S.base!==want){tex.dispose();return;}tex.colorSpace=THREE.SRGBColorSpace;mat.map=tex;mat.opacity=1;mat.needsUpdate=true;tileOk++;updateAttr();needs();},undefined,()=>{tileFail++;updateAttr();});
+ }}
+function updateAttr(){ let t=S.base==="none"?"背景地図なし":BASES[S.base].attr; if(S.base!=="none"&&tileFail>0&&tileOk===0) t+="（地図タイルを取得できませんでした。分析データの表示には影響しません）"; $("attr").innerHTML=t+"｜都県境：メッシュの所属都県から作成"; }
+
+/* 高さ（表示用の変換のみ。スコアそのものは変えない） */
+const cellH=new Float32Array(N), vH=new Float32Array(NV), colTop=new Float32Array(N);
+let smoothCheck="";
+function computeHeights(){
+ for(let i=0;i<N;i++) cellH[i]=Math.pow(Math.max(0,SCORE[i])/100,S.gam);
+ const base=new Float32Array(NV);
+ for(let v=0;v<NV;v++){ let s=0; for(const i of vCells[v]) s+=cellH[i]; base[v]=s/vCells[v].length; }
+ vH.set(base);
+ const tmp=new Float32Array(NV);
+ for(let p=0;p<S.sm;p++){ for(let v=0;v<NV;v++){ let s=vH[v],n=1; for(let j=0;j<4;j++){const u=vNb[v*4+j]; if(u>=0){s+=vH[u];n++;}} tmp[v]=s/n; } vH.set(tmp); }
+ // 上限：半径（平滑化回数＋1）区画以内にある元の区画の最大値を超えない（新しい局所的な高まりを作らない）
+ let viol=0, maxBefore=0, maxAfter=0;
+ if(S.sm>0){ let lm=new Float32Array(NV); for(let v=0;v<NV;v++){ let m=0; for(const i of vCells[v]) m=Math.max(m,cellH[i]); lm[v]=m; }
+  const t2=new Float32Array(NV); for(let p=0;p<S.sm;p++){ for(let v=0;v<NV;v++){ let m=lm[v]; for(let j=0;j<4;j++){const u=vNb[v*4+j]; if(u>=0) m=Math.max(m,lm[u]);} t2[v]=m; } lm.set(t2); }
+  for(let v=0;v<NV;v++){ if(vH[v]>lm[v]+1e-7){ viol++; vH[v]=lm[v]; } } }
+ for(let i=0;i<N;i++) maxBefore=Math.max(maxBefore,cellH[i]); for(let v=0;v<NV;v++) maxAfter=Math.max(maxAfter,vH[v]);
+ smoothCheck=`曲面の最大の高さ ${(maxAfter*100).toFixed(1)}%（元データの最大＝100%）。上限を超えた頂点 ${viol} 件（0件なら平滑化で新しい高まりは生じていない）。`;
+ for(let v=0;v<NV;v++) vH[v]*=H0;
+}
+/* 2km 集約（柱表示のみ。2×2区画の E56 順位点の平均。表示用） */
+function buildAgg(){ const map=new Map(); for(let i=0;i<N;i++){ const k=cellKey(ROW[i]>>1,COL[i]>>1); if(!map.has(k)) map.set(k,{r:ROW[i]>>1,c:COL[i]>>1,s:0,n:0,mx:0,cells:[]}); const a=map.get(k); a.s+=SCORE[i]; a.n++; a.mx=Math.max(a.mx,SCORE[i]); a.cells.push(i);} agg=[...map.values()].map(a=>({...a,mean:a.s/a.n})); }
+
+let surface=null, walls=null, columns=null, borderLines=null, triCell=null, wallCell=null, colIndex=null;
+const mats={surf:new THREE.MeshLambertMaterial({vertexColors:true}),wall:new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}),col:new THREE.MeshLambertMaterial()};
+function disposeObj(o){ if(!o) return; o.parent&&o.parent.remove(o); o.geometry.dispose(); }
+function buildSurface(){
+ disposeObj(surface); disposeObj(walls); surface=walls=null;
+ const pos=new Float32Array(N*4*3), nor=new Float32Array(N*4*3), col=new Float32Array(N*4*3), idx=new Uint32Array(N*6); triCell=new Int32Array(N*2);
+ const VN=new Float32Array(NV*3);
+ for(let v=0;v<NV;v++){ const e=vNb[v*4],w=vNb[v*4+1],n=vNb[v*4+2],s=vNb[v*4+3];
+  const hx1=e>=0?vH[e]:vH[v],hx0=w>=0?vH[w]:vH[v],dx=(e>=0?VX[e]:VX[v])-(w>=0?VX[w]:VX[v])||1;
+  const hz1=s>=0?vH[s]:vH[v],hz0=n>=0?vH[n]:vH[v],dz=(s>=0?VZ[s]:VZ[v])-(n>=0?VZ[n]:VZ[v])||1;
+  const gx=(hx1-hx0)/dx,gz=(hz1-hz0)/dz,L=Math.hypot(gx,1,gz); VN[v*3]=-gx/L; VN[v*3+1]=1/L; VN[v*3+2]=-gz/L; }
+ for(let i=0;i<N;i++){ const rgb=srgb(cellRGB(i));
+  for(let j=0;j<4;j++){ const v=cellV[i*4+j],o=(i*4+j)*3; pos[o]=VX[v];pos[o+1]=vH[v];pos[o+2]=VZ[v]; nor[o]=VN[v*3];nor[o+1]=VN[v*3+1];nor[o+2]=VN[v*3+2]; col[o]=rgb.r;col[o+1]=rgb.g;col[o+2]=rgb.b; }
+  const b=i*4; idx.set([b,b+2,b+1,b+1,b+2,b+3],i*6); triCell[i*2]=i; triCell[i*2+1]=i; }
+ const g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.BufferAttribute(pos,3)); g.setAttribute("normal",new THREE.BufferAttribute(nor,3)); g.setAttribute("color",new THREE.BufferAttribute(col,3)); g.setIndex(new THREE.BufferAttribute(idx,1)); g.computeBoundingSphere();
+ surface=new THREE.Mesh(g,mats.surf); scaled.add(surface);
+ const wp=[],wn=[],wc=[],wcell=[]; const sides=[[[0,1],[2,3],[1,0,0]],[[0,-1],[1,0],[-1,0,0]],[[1,0],[3,1],[0,0,-1]],[[-1,0],[0,2],[0,0,1]]];
+ for(let i=0;i<N;i++){ const rgb=srgb(cellRGB(i)).multiplyScalar(0.55);
+  for(const [[dr,dc],[a,b],nrm] of sides){ if(cellIndex.has(cellKey(ROW[i]+dr,COL[i]+dc))) continue; const va=cellV[i*4+a],vb=cellV[i*4+b];
+   for(const p of [[VX[va],vH[va],VZ[va]],[VX[vb],vH[vb],VZ[vb]],[VX[va],0,VZ[va]],[VX[vb],vH[vb],VZ[vb]],[VX[vb],0,VZ[vb]],[VX[va],0,VZ[va]]]){ wp.push(...p); wn.push(...nrm); wc.push(rgb.r,rgb.g,rgb.b); } wcell.push(i,i); } }
+ const wg=new THREE.BufferGeometry(); wg.setAttribute("position",new THREE.Float32BufferAttribute(wp,3)); wg.setAttribute("normal",new THREE.Float32BufferAttribute(wn,3)); wg.setAttribute("color",new THREE.Float32BufferAttribute(wc,3));
+ walls=new THREE.Mesh(wg,mats.wall); scaled.add(walls); wallCell=Int32Array.from(wcell);
+}
+function buildColumns(){
+ disposeObj(columns); columns=null; const box=new THREE.BoxGeometry(1,1,1); box.translate(0,0.5,0);
+ const m4=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(), p=new THREE.Vector3();
+ if(S.res===1){ columns=new THREE.InstancedMesh(box,mats.col,N); colIndex=null;
+  for(let i=0;i<N;i++){ colTop[i]=cellH[i]*H0; const x0=cx0(COL[i]),x1=cx0(COL[i]+1),z0=cz0(ROW[i]),z1=cz0(ROW[i]+1);
+   p.set((x0+x1)/2,0,(z0+z1)/2); sc.set((x1-x0)*0.94,Math.max(0.01,cellH[i]*H0),Math.abs(z1-z0)*0.94); m4.compose(p,q,sc); columns.setMatrixAt(i,m4); columns.setColorAt(i,srgb(cellRGB(i))); } }
+ else { if(!agg) buildAgg(); columns=new THREE.InstancedMesh(box,mats.col,agg.length); colIndex=agg;
+  agg.forEach((a,k)=>{ const x0=cx0(a.c*2),x1=cx0(a.c*2+2),z0=cz0(a.r*2),z1=cz0(a.r*2+2); const h=Math.pow(a.mean/100,S.gam); for(const i of a.cells) colTop[i]=h*H0;
+   p.set((x0+x1)/2,0,(z0+z1)/2); sc.set((x1-x0)*0.94,Math.max(0.01,h*H0),Math.abs(z1-z0)*0.94); m4.compose(p,q,sc); columns.setMatrixAt(k,m4);
+   const rep=a.cells.reduce((b,i)=>SCORE[i]>SCORE[b]?i:b,a.cells[0]); const c=S.cmode==="e56"?SEQ[binOf(a.mean)]:cellRGB(rep); columns.setColorAt(k,srgb(c)); }); }
+ columns.instanceMatrix.needsUpdate=true; columns.instanceColor.needsUpdate=true; columns.computeBoundingSphere(); scaled.add(columns);
+}
+/* 都県境（隣接メッシュの所属都県が異なる辺） */
+const borderEdges=[];
+for(let i=0;i<N;i++) for(const [dr,dc] of [[0,1],[1,0]]){ const j=cellIndex.get(cellKey(ROW[i]+dr,COL[i]+dc)); if(j===undefined||M.pref[i]===M.pref[j]) continue;
+ if(dc===1) borderEdges.push([ROW[i],COL[i]+1,ROW[i]+1,COL[i]+1]); else borderEdges.push([ROW[i]+1,COL[i],ROW[i]+1,COL[i]+1]); }
+function topAt(r,c){ const v=vIndex.get(cellKey(r,c)); if(v===undefined) return 0; if(S.mode==="surface") return vH[v]; let m=0; for(const i of vCells[v]) m=Math.max(m,colTop[i]); return m; }
+function buildBorders(){ disposeObj(borderLines); const pos=new Float32Array(borderEdges.length*6);
+ borderEdges.forEach((e,k)=>pos.set([cx0(e[1]),topAt(e[0],e[1])+0.05,cz0(e[0]),cx0(e[3]),topAt(e[2],e[3])+0.05,cz0(e[2])],k*6));
+ const g=new THREE.BufferGeometry(); g.setAttribute("position",new THREE.BufferAttribute(pos,3));
+ borderLines=new THREE.LineSegments(g,new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.6})); borderLines.visible=S.border; scaled.add(borderLines); }
+
+/* スポット・候補 */
+const spotAll=[]; for(let k=0;k<SP.name.length;k++) if(SP.lat[k]!=null) spotAll.push(k);
+const headGeo=new THREE.SphereGeometry(1,14,10), stemGeo=new THREE.CylinderGeometry(0.12,0.12,1,6); stemGeo.translate(0,0.5,0);
+const coneGeo=new THREE.ConeGeometry(1,2.2,4); coneGeo.rotateX(Math.PI); coneGeo.translate(0,1.1,0);
+let heads=null, stems=null, cones=null, visSpots=[], visCand=[];
+function heightAtLL(lat,lon){ const r=Math.floor(lat*120),c=Math.floor((lon-100)*80); const i=cellIndex.get(cellKey(r,c)); if(i===undefined) return 0;
+ if(S.mode==="column") return colTop[i]; const fr=lat*120-r, fc=(lon-100)*80-c;
+ const sw=vH[cellV[i*4]],nw=vH[cellV[i*4+1]],se=vH[cellV[i*4+2]],ne=vH[cellV[i*4+3]]; return (sw*(1-fc)+se*fc)*(1-fr)+(nw*(1-fc)+ne*fc)*fr; }
+function cellTop(i){ return S.mode==="column"? colTop[i] : (vH[cellV[i*4]]+vH[cellV[i*4+1]]+vH[cellV[i*4+2]]+vH[cellV[i*4+3]])/4; }
+function buildMarkers(){
+ [heads,stems,cones].forEach(o=>{ if(o){ o.parent.remove(o); o.dispose(); } }); heads=stems=cones=null;
+ visSpots=spotAll.filter(k=>(SP.tier[k]<=1&&S.spOn)||(SP.tier[k]===2&&S.spBroad));
+ if(visSpots.length){ heads=new THREE.InstancedMesh(headGeo,new THREE.MeshBasicMaterial(),visSpots.length); stems=new THREE.InstancedMesh(stemGeo,new THREE.MeshBasicMaterial({color:0xffffff,transparent:true,opacity:0.6}),visSpots.length);
+  visSpots.forEach((k,j)=>heads.setColorAt(j,new THREE.Color(SP.tier[k]===2?0x8a8f98:(SP.rk[k]!=null&&SP.rk[k]<=20?0xff4fd8:0xffffff)))); heads.instanceColor.needsUpdate=true; world.add(stems); world.add(heads); }
+ visCand=[]; for(let i=0;i<N;i++) if((S.cOn&&M.cs[i])||(S.c1On&&M.ct[i]&&!M.cs[i])) visCand.push(i);
+ if(visCand.length){ cones=new THREE.InstancedMesh(coneGeo,new THREE.MeshLambertMaterial(),visCand.length);
+  visCand.forEach((i,j)=>cones.setColorAt(j,new THREE.Color(M.cs[i]?0xff2fa0:0xff9a3c))); cones.instanceColor.needsUpdate=true; world.add(cones); }
+ placeMarkers(true);
+}
+let lastSz=-1;
+function placeMarkers(force){
+ const d=camera.position.distanceTo(controls.target), sz=Math.min(2.2,Math.max(0.07,d/750));
+ if(!force&&Math.abs(sz-lastSz)/sz<0.04) return; lastSz=sz;
+ const m4=new THREE.Matrix4(),q=new THREE.Quaternion(),p=new THREE.Vector3(),sc=new THREE.Vector3();
+ if(heads){ visSpots.forEach((k,j)=>{ const h=heightAtLL(SP.lat[k],SP.lon[k])*S.mul, L=sz*8, x=mx(SP.lon[k]), z=mz(SP.lat[k]);
+  p.set(x,h,z); sc.set(sz,L,sz); m4.compose(p,q,sc); stems.setMatrixAt(j,m4); const r=sz*(SP.tier[k]===2?0.8:(SP.rk[k]!=null&&SP.rk[k]<=20?1.8:1.15)); p.set(x,h+L,z); sc.set(r,r,r); m4.compose(p,q,sc); heads.setMatrixAt(j,m4); });
+  heads.instanceMatrix.needsUpdate=stems.instanceMatrix.needsUpdate=true; heads.computeBoundingSphere(); stems.computeBoundingSphere(); }
+ if(cones){ visCand.forEach((i,j)=>{ const x=(cx0(COL[i])+cx0(COL[i]+1))/2, z=(cz0(ROW[i])+cz0(ROW[i]+1))/2, h=cellTop(i)*S.mul, r=sz*1.3;
+  p.set(x,h+sz*1.5,z); sc.set(r,r,r); m4.compose(p,q,sc); cones.setMatrixAt(j,m4); }); cones.instanceMatrix.needsUpdate=true; cones.computeBoundingSphere(); }
+ if(heads) heads.visible=stems.visible=true; if(cones) cones.visible=true;
+}
+/* 都県ラベル */
+const prefC=MT.prefs.map((name,pi)=>{let sx=0,sz=0,n=0;for(let i=0;i<N;i++) if(M.pref[i]===pi){sx+=cx0(COL[i]+0.5);sz+=cz0(ROW[i]+0.5);n++;} return {name,x:sx/n,z:sz/n};});
+const lblBox=$("lbls"); const lblEls=prefC.map(p=>{const d=document.createElement("div");d.className="lbl";d.textContent=p.name;lblBox.appendChild(d);return d;});
+const tmpV=new THREE.Vector3();
+function updateLabels(){ lblBox.style.display=S.labels?"":"none"; if(!S.labels) return; const w=view.clientWidth,h=view.clientHeight;
+ prefC.forEach((p,k)=>{ tmpV.set(p.x,H0*0.12*S.mul,p.z).project(camera); const el=lblEls[k]; if(tmpV.z>1){el.style.display="none";return;} el.style.display=""; el.style.left=((tmpV.x+1)/2*w)+"px"; el.style.top=((1-tmpV.y)/2*h)+"px"; }); }
+
+function rebuild(){
+ computeHeights();
+ if(S.mode==="surface"){ disposeObj(columns); columns=null; buildSurface(); } else { disposeObj(surface); disposeObj(walls); surface=walls=null; buildColumns(); }
+ buildBorders(); buildMarkers(); scaled.scale.y=S.mul; renderLegend(); if(pinned) renderInfo(pinned); else renderInfoDefault(); needs();
+}
+/* 凡例・情報 */
+function renderLegend(){
+ let h="";
+ if(S.cmode==="e56") h+=`<b>色：${S.hval==="e55"?"E55スコア（参考）":"E56スコア"}（順位点、全域共通の区分）</b>　`+SEQ.map((c,k)=>`<span class="sw" style="background:rgb(${c})"></span>${SEQL[k]}`).join("　");
+ else if(S.cmode==="k5") h+=`<b>色：安定度（23条件で上位5%の数）</b>　`+KC.map((c,k)=>`<span class="sw" style="background:rgb(${c})"></span>${KL[k]}`).join("　");
+ else h+=`<b>色：スコア×安定度</b>　`+CLS.map((c,k)=>`<span class="sw" style="background:rgb(${c})"></span>${CLSL[k]}`).join("　");
+ h+=`<div style="margin-top:3px"><span class="dot" style="background:#fff"></span>既存スポット（具体的地点）　<span class="dot" style="background:#ff4fd8"></span>同 E56順位TOP20　<span class="dot" style="background:#8a8f98"></span>広域代表点　<span style="color:#ff2fa0">▼</span> 安定上位の未登録候補　<span style="color:#ff9a3c">▼</span> E56上位1%の未登録区画</div>
+ <div class="k" style="margin-top:3px">${S.hval==="e55"?"<b style='color:#ffc58a'>参考表示：高さ・色は STEP 5.5 の E55。</b>":""}高さ＝(${S.hval==="e55"?"E55":"E56"}スコア/100)<sup>${S.gam.toFixed(1)}</sup>×${H0}×倍率${S.mul}（表示用の変換）。${S.mode==="surface"?`曲面は表示上の平滑化（${S.sm}回）で、新しい分析結果ではありません（色は各区画の元の値）。${smoothCheck}`:(S.res===2?"2km柱は2×2区画の順位点の平均（表示用の集約）。":"柱は各1kmメッシュの値そのもの。")}高さ・倍率を変えてもスコアの数値は変わりません。</div>`;
+ $("legend").innerHTML=h;
+ $("modeNote").textContent=S.mode==="column"?"基本表示：各メッシュのE56をそのまま柱の高さにします。":"表示用の補間・平滑化。元データにない高まりは作らないよう上限を設定。";
+}
+function cbars(i){ const r=1.5; let h='<div class="k" style="margin:5px 0 2px">11要因の寄与（E56、対数オッズ）</div>';
+ MT.factors.map((f,j)=>[f,M.c[j][i]/1000]).sort((a,b)=>b[1]-a[1]).forEach(([f,v])=>{ const w=Math.min(50,Math.abs(v)/r*50);
+  h+=`<div class="cbar"><span>${esc(f)}</span><span class="z"><b></b><i style="${v>=0?`left:50%;width:${w}%;background:#ff8a4c`:`right:50%;width:${w}%;background:#4c9dff`}"></i></span><span style="text-align:right">${v>=0?"+":""}${v.toFixed(2)}</span></div>`; });
+ h+='<div class="k" style="margin:5px 0 2px">要因群</div>'; MT.groups.forEach((g,j)=>{ const v=M.gr[j][i]/1000,w=Math.min(50,Math.abs(v)/r*50);
+  h+=`<div class="cbar"><span>${esc(g)}</span><span class="z"><b></b><i style="${v>=0?`left:50%;width:${w}%;background:#ff8a4c`:`right:50%;width:${w}%;background:#4c9dff`}"></i></span><span style="text-align:right">${v>=0?"+":""}${v.toFixed(2)}</span></div>`; });
+ return h+'<div class="k" style="font-size:11px">要因どうしに相関があるため、寄与は因果効果ではありません。</div>'; }
+const GL=["一般区画（掲載未確認）","掲載区画（具体的地点）","保留区画（広域代表点のみ。参考値）"];
+function meshInfo(i,compact){
+ let h=`<h2>メッシュ ${M.code[i]}</h2><div class="k">${esc(MT.prefs[M.pref[i]])} ${esc(MT.munis[M.muni[i]]??"")}｜${MT.strata[M.st[i]]}｜${GL[M.g[i]]}</div>`;
+ if(M.cs[i]) h+=`<div style="color:#ff6fbf"><b>安定上位の未登録候補</b>（地域番号 ${M.as[i]}）</div>`; else if(M.ct[i]) h+=`<div style="color:#ffb070">E56上位1%の未登録区画</div>`;
+ h+=`<table><tr><td>E56スコア</td><td><b>${v3(M.e56[i])}</b>${M.rk[i]!=null?`（${M.rk[i].toLocaleString()}位）`:""}</td></tr><tr><td>安定度</td><td><b>${M.k5[i]}/${NC}</b></td></tr>`;
+ if(!compact) h+=`<tr><td>E55／A／B</td><td>${v3(M.e55[i])}／${v3(M.A[i])}／${v3(M.B[i])}</td></tr>`;
+ h+="</table>"; if(!compact){ h+=cbars(i); if(M.cs[i]||M.ct[i]) h+='<div class="warn">未登録＝使用したデータで掲載が確認されなかった区画。心霊体験が起こると予測された場所ではありません。</div>'; }
+ return h; }
+function spotInfo(k,compact){ const i=SP.mesh[k]!=null?M.code.indexOf(SP.mesh[k]):-1;
+ let h=`<h2>${esc(SP.name[k])}</h2><div class="k">${esc(SP.pref[k])} ${esc(SP.muni[k])}｜${esc(MT.genres[SP.genre[k]])}</div>`;
+ if(SP.tier[k]===2) h+='<div class="warn">広域の代表点（位置精度が低い）。区画のスコアは場所全体の条件ではありません。</div>';
+ h+=`<table><tr><td>E56スコア</td><td><b>${v3(SP.e56[k])}</b></td></tr><tr><td>E56順位</td><td><b>${SP.rk[k]??"—"}</b>位（${MT.n_spot_ranked}件中）</td></tr><tr><td>安定度</td><td>${SP.k5[k]??"—"}/${NC}</td></tr>`;
+ if(!compact) h+=`<tr><td>STEP 5.5 E55</td><td>${v3(SP.e55[k])}（${SP.rk55[k]??"—"}位）</td></tr><tr><td>STEP 5 A／B</td><td>${v3(SP.A[k])}（${SP.rA[k]??"—"}位）／${v3(SP.B[k])}（${SP.rB[k]??"—"}位）</td></tr>
+  <tr><td>上位3つの押し上げ要因</td><td>${esc(SP.top3[k]||"—")}</td></tr><tr><td>座標の確かさ</td><td>${esc(MT.tiers[SP.tier[k]])}</td></tr><tr><td>STEP 5.6の判定</td><td>${esc(SP.judge[k]||"—")}</td></tr>`;
+ h+="</table>";
+ if(!compact){ if(SP.same[k]>1) h+=`<div class="warn">同じ1kmメッシュに${SP.same[k]}件の掲載があり、すべて同じ環境スコア・同じ順位になります。</div>`;
+  if(SP.url[k]) h+=`<div><a href="${esc(SP.url[k])}" target="_blank" rel="noopener">掲載元ページ</a></div>`; if(i>=0) h+=cbars(i); }
+ return h; }
+function renderInfoDefault(){ const top=spotAll.filter(k=>SP.rk[k]!=null&&SP.tier[k]<=1).sort((a,b)=>SP.rk[a]-SP.rk[b]).slice(0,12);
+ $("info").innerHTML=`<h2>E56順位 上位の既存スポット（具体的地点）</h2><div class="k" style="font-size:12px">クリックで移動・詳細（同じメッシュは同順位）</div>
+ <ol id="top">${top.map(k=>`<li data-k="${k}">${SP.rk[k]}位 ${esc(SP.name[k])}（${esc(SP.muni[k])}）</li>`).join("")}</ol>
+ <div class="k" style="font-size:12px;margin-top:6px">区画・スポット・▼（候補）にマウスを重ねると情報、クリックで固定します。</div>
+ <div class="k" style="font-size:11px;margin-top:6px">表示区画 ${N.toLocaleString()}（うち分析対象 ${MT.n_D.toLocaleString()}、保留区画は参考値）。スコアは STEP 5.6 の値をそのまま表示しています。</div>`;
+ $("top").querySelectorAll("li").forEach(li=>li.onclick=()=>focusSpot(+li.dataset.k)); }
+let pinned=null;
+function renderInfo(p){ $("info").innerHTML=(p.type==="spot"?spotInfo(p.k,false):meshInfo(p.i,false))+`<div style="margin-top:8px"><button class="btn" id="unpin">閉じる</button></div>`; $("unpin").onclick=()=>{pinned=null;renderInfoDefault();}; }
+/* ピッキング */
+const ray=new THREE.Raycaster(), ndc=new THREE.Vector2();
+function pick(ev){ const rect=renderer.domElement.getBoundingClientRect(); ndc.set(((ev.clientX-rect.left)/rect.width)*2-1,-((ev.clientY-rect.top)/rect.height)*2+1); ray.setFromCamera(ndc,camera);
+ if(heads){ const hit=ray.intersectObject(heads,false)[0]; if(hit) return {type:"spot",k:visSpots[hit.instanceId]}; }
+ if(cones){ const hit=ray.intersectObject(cones,false)[0]; if(hit) return {type:"mesh",i:visCand[hit.instanceId]}; }
+ const objs=[surface,walls,columns].filter(Boolean); const hit=ray.intersectObjects(objs,false)[0]; if(!hit) return null;
+ if(hit.object===surface) return {type:"mesh",i:triCell[hit.faceIndex]}; if(hit.object===walls) return {type:"mesh",i:wallCell[hit.faceIndex]};
+ if(hit.object===columns){ if(colIndex){ const a=colIndex[hit.instanceId]; const rep=a.cells.reduce((b,i)=>SCORE[i]>SCORE[b]?i:b,a.cells[0]); return {type:"mesh",i:rep}; } return {type:"mesh",i:hit.instanceId}; }
+ return null; }
+const tip=$("tip"); let moveEv=null,dragging=false,downXY=null;
+renderer.domElement.addEventListener("pointermove",e=>{moveEv=e;});
+renderer.domElement.addEventListener("pointerleave",()=>{moveEv=null;tip.style.display="none";});
+renderer.domElement.addEventListener("pointerdown",e=>{downXY=[e.clientX,e.clientY];dragging=true;tip.style.display="none";});
+renderer.domElement.addEventListener("pointerup",e=>{dragging=false; if(downXY&&Math.hypot(e.clientX-downXY[0],e.clientY-downXY[1])<5){ const p=pick(e); if(p){pinned=p;renderInfo(p);} } downXY=null;});
+let lastPick=0;
+function hoverTick(now){ if(!moveEv||dragging||now-lastPick<60) return; lastPick=now; const e=moveEv; moveEv=null; const p=pick(e);
+ if(!p){tip.style.display="none";return;} tip.innerHTML=p.type==="spot"?spotInfo(p.k,true):meshInfo(p.i,true); tip.style.display="block";
+ const rect=$("app").getBoundingClientRect(); let x=e.clientX-rect.left+14,y=e.clientY-rect.top+14; if(x+tip.offsetWidth>rect.width-6) x=e.clientX-rect.left-tip.offsetWidth-14; if(y+tip.offsetHeight>rect.height-6) y=Math.max(6,rect.height-tip.offsetHeight-6); tip.style.left=x+"px"; tip.style.top=y+"px"; }
+/* カメラ */
+function boundsOf(f){ let x0=1e9,x1=-1e9,z0=1e9,z1=-1e9,n=0; for(let i=0;i<N;i++) if(f(i)){ const a=cx0(COL[i]),b=cz0(ROW[i]); x0=Math.min(x0,a);x1=Math.max(x1,a);z0=Math.min(z0,b);z1=Math.max(z1,b);n++; } return n?{x0,x1,z0,z1}:null; }
+const ll=(lon0,lon1,lat0,lat1)=>i=>{const lo=100+COL[i]/80,la=ROW[i]/120;return lo>=lon0&&lo<=lon1&&la>=lat0&&la<=lat1;};
+const REGIONS=[{name:"分析対象全体",f:i=>true},{name:"東京・神奈川周辺",f:ll(138.95,140.05,35.15,36.0)},{name:"東京多摩・神奈川西部（山地）",f:ll(138.9,139.45,35.3,35.85)},{name:"埼玉南部・東京北部",f:ll(139.3,139.95,35.75,36.1)}];
+MT.prefs.forEach((p,pi)=>REGIONS.push({name:p,f:i=>M.pref[i]===pi}));
+const sel=$("region"); REGIONS.forEach((r,k)=>sel.insertAdjacentHTML("beforeend",`<option value="${k}">${esc(r.name)}</option>`));
+let anim=null;
+function flyTo(target,dist,polar,azim,ms=900){ const sph=new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target)); const from={t:controls.target.clone(),r:sph.radius,ph:sph.phi,th:sph.theta}, to={t:target.clone(),r:dist,ph:polar??sph.phi,th:azim??sph.theta};
+ let dth=to.th-from.th; while(dth>Math.PI) dth-=2*Math.PI; while(dth<-Math.PI) dth+=2*Math.PI; const t0=performance.now(); tip.style.display="none";
+ anim=now=>{ let u=Math.min(1,(now-t0)/ms); u=u<.5?2*u*u:1-Math.pow(-2*u+2,2)/2; controls.target.lerpVectors(from.t,to.t,u); const s=new THREE.Spherical(from.r+(to.r-from.r)*u,from.ph+(to.ph-from.ph)*u,from.th+dth*u); camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(s)); if(u>=1) anim=null; }; }
+function fitDist(b){ const w=Math.max(b.x1-b.x0,(b.z1-b.z0)*camera.aspect,20); return w/2/Math.tan(camera.fov*DEG/2)/Math.max(camera.aspect,0.6)*1.25+20; }
+function flyRegion(k,polar){ const b=boundsOf(REGIONS[k].f); if(!b) return; flyTo(new THREE.Vector3((b.x0+b.x1)/2,0,(b.z0+b.z1)/2),fitDist(b),polar,undefined); }
+sel.onchange=()=>flyRegion(+sel.value);
+function focusSpot(k){ if(SP.lat[k]==null){ pinned={type:"spot",k}; renderInfo(pinned); return; }
+ if(SP.tier[k]===2&&!S.spBroad){ S.spBroad=true; $("spBroad").checked=true; buildMarkers(); }
+ flyTo(new THREE.Vector3(mx(SP.lon[k]),heightAtLL(SP.lat[k],SP.lon[k])*S.mul,mz(SP.lat[k])),40,50*DEG,undefined); pinned={type:"spot",k}; renderInfo(pinned); }
+document.querySelectorAll("[data-view]").forEach(b=>b.onclick=()=>{ const v=b.dataset.view,d=camera.position.distanceTo(controls.target);
+ if(v==="top") flyTo(controls.target,d,0.5*DEG); else if(v==="low") flyTo(controls.target,d,74*DEG); else if(v==="oblique") flyTo(controls.target,d,50*DEG); else { sel.value=0; flyRegion(0,48*DEG); } });
+/* UI */
+function seg(id,key,conv,after){ const box=$(id); box.querySelectorAll("button").forEach(b=>b.onclick=()=>{ box.querySelectorAll("button").forEach(x=>x.classList.toggle("on",x===b)); S[key]=conv(b.dataset.v); after?after():rebuild(); }); }
+seg("mode","mode",String,()=>{ $("rowSmooth").classList.toggle("hidden",S.mode!=="surface"); $("rowRes").classList.toggle("hidden",S.mode!=="column"); rebuild(); });
+seg("res","res",Number); seg("mulb","mul",Number,()=>{ scaled.scale.y=S.mul; placeMarkers(true); buildBorders(); renderLegend(); needs(); });
+let gT=null; $("gam").oninput=e=>{S.gam=+e.target.value;$("vGam").textContent=S.gam.toFixed(1);clearTimeout(gT);gT=setTimeout(rebuild,120);};
+$("sm").oninput=e=>{S.sm=+e.target.value;$("vSm").textContent=S.sm;clearTimeout(gT);gT=setTimeout(rebuild,120);};
+$("cmode").onchange=e=>{S.cmode=e.target.value;rebuild();};
+$("hval").onchange=e=>{S.hval=e.target.value;setScore(S.hval);rebuild();};
+["spOn","spBroad","cOn","c1On"].forEach(k=>$(k).onchange=e=>{S[k]=e.target.checked;buildMarkers();needs();});
+$("border").onchange=e=>{S.border=e.target.checked;borderLines.visible=S.border;needs();};
+$("labels").onchange=e=>{S.labels=e.target.checked;needs();};
+$("rot").onchange=e=>{S.rot=e.target.checked;controls.autoRotate=S.rot;needs();};
+$("base").onchange=e=>{S.base=e.target.value;loadBase();needs();};
+$("q").oninput=e=>{ const q=e.target.value.trim().toLowerCase(), ul=$("search-res"); ul.innerHTML=""; if(!q) return;
+ for(let k=0;k<SP.name.length&&ul.children.length<30;k++){ if(!(SP.name[k]+" "+SP.muni[k]+" "+SP.pref[k]).toLowerCase().includes(q)) continue;
+  const li=document.createElement("li"); li.textContent=SP.name[k]+"（"+SP.muni[k]+"）"+(SP.lat[k]==null?"［座標なし］":(SP.tier[k]===2?"［広域代表点］":"")); li.onclick=()=>focusSpot(k); ul.appendChild(li); } };
+$("shot").onclick=()=>{ renderer.render(scene,camera); const a=document.createElement("a"); a.download=`e56_3d_${S.mode}_${S.mul}x.png`; a.href=renderer.domElement.toDataURL("image/png"); a.click(); };
+/* ループ */
+let dirty=true; function needs(){dirty=true;} controls.addEventListener("change",needs);
+function resize(){ const w=view.clientWidth,h=view.clientHeight; if(!w||!h) return; renderer.setSize(w,h,false); renderer.domElement.style.width=w+"px"; renderer.domElement.style.height=h+"px"; camera.aspect=w/h; camera.updateProjectionMatrix(); needs(); }
+new ResizeObserver(resize).observe(view);
+function loop(now){ requestAnimationFrame(loop); if(anim){anim(now);dirty=true;} const moved=controls.update(); if(S.rot) dirty=true; hoverTick(now); if(dirty||moved){ placeMarkers(); renderer.render(scene,camera); updateLabels(); dirty=false; } }
+setScore("e56"); rebuild(); updateAttr(); resize();
+{ const b=boundsOf(REGIONS[0].f); const c=new THREE.Vector3((b.x0+b.x1)/2,0,(b.z0+b.z1)/2+10); controls.target.copy(c); const d=fitDist(b)*0.8;
+  camera.position.copy(c).add(new THREE.Vector3().setFromSpherical(new THREE.Spherical(d,50*DEG,-12*DEG))); controls.update(); }
+$("loading").remove(); requestAnimationFrame(loop);
+window.__map3d={S,M,SP,rebuild,flyRegion,focusSpot,camera,controls,setMul:m=>{document.querySelector(`#mulb button[data-v="${m}"]`).click();},pick:(x,y)=>pick({clientX:x,clientY:y}),smoothCheck:()=>smoothCheck};
+})();
+</script>
+</body>
+</html>
