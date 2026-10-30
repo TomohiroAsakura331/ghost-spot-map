@@ -1,0 +1,11 @@
+{
+  "release": "E58",
+  "ranking_date": "2026-10-30",
+  "source_sha256": {
+    "map/data/s58_map_data.json.gz": "02f15cb9d77d9786240dc589f2446e091d63266bea6a6903def5373e73fbb6b1",
+    "outputs/s58_mesh_scores_E58.csv": "9ba9768af5b7e4947744914529ced076825b74b6b30320710eda9cfd1d83d809",
+    "outputs/s58_adopted_top30_spots.csv": "ce995b42c69165a353324b41791b53807ce3ce422def0ecdd2371bd09360d05a",
+    "outputs/s58_factor_importance_E56_vs_E58.csv": "98fd011d55ea5d5bdb8bd64f3e820a0fb8730ddcdab1bcbb09ccf64d7bfcf529",
+    "outputs/step5_8_report.html": "5b4b9fb82e7bbc8a2a46c1f82b37656b0bf0fae5f7dba9e9bb9599e4a207b8d1"
+  }
+}

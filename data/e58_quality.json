@@ -1,0 +1,134 @@
+{
+  "ranking_fetched": "2026-10-30",
+  "total_listed": 2252,
+  "adopted": 679,
+  "with_coords": 670,
+  "no_coords": 9,
+  "in_existing": 646,
+  "new": 33,
+  "duplicates_spotcd": 0,
+  "broad_pins": 314,
+  "pref_inconsistent": 5,
+  "outside_universe": 59,
+  "in_hold_mesh": 244,
+  "assigned_to_D": 367,
+  "positive_meshes": 307,
+  "excluded_broad_only_meshes": 23,
+  "tb_only_positive_meshes": 97,
+  "positives_noTB": 210,
+  "mesh_code_agreement_existing": 1.0,
+  "under_investigation": 0,
+  "positives_old_A_meshes": 283,
+  "positives_old_B_meshes": 24,
+  "old_A_now_zero": 568,
+  "coord_diff_gt200": 0,
+  "coord_diff_checked": 670,
+  "ties_at_boundary": [
+    {
+      "都県": "千葉県",
+      "境界内側の総合得点": 14201,
+      "境界外側の総合得点": 14193,
+      "同点": false
+    },
+    {
+      "都県": "埼玉県",
+      "境界内側の総合得点": 13398,
+      "境界外側の総合得点": 13382,
+      "同点": false
+    },
+    {
+      "都県": "山梨県",
+      "境界内側の総合得点": 12255,
+      "境界外側の総合得点": 12243,
+      "同点": false
+    },
+    {
+      "都県": "東京都",
+      "境界内側の総合得点": 13270,
+      "境界外側の総合得点": 13269,
+      "同点": false
+    },
+    {
+      "都県": "栃木県",
+      "境界内側の総合得点": 11189,
+      "境界外側の総合得点": 11180,
+      "同点": false
+    },
+    {
+      "都県": "神奈川県",
+      "境界内側の総合得点": 13173,
+      "境界外側の総合得点": 13163,
+      "同点": false
+    },
+    {
+      "都県": "群馬県",
+      "境界内側の総合得点": 12153,
+      "境界外側の総合得点": 12151,
+      "同点": false
+    },
+    {
+      "都県": "茨城県",
+      "境界内側の総合得点": 10140,
+      "境界外側の総合得点": 10137,
+      "同点": false
+    }
+  ],
+  "meta": {
+    "東京都": {
+      "site_code": 8,
+      "total_listed": 505,
+      "pages": 13,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=8",
+      "fetched_at": "2026-10-30T12:55:34+09:00"
+    },
+    "神奈川県": {
+      "site_code": 9,
+      "total_listed": 406,
+      "pages": 11,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=9",
+      "fetched_at": "2026-10-30T12:56:24+09:00"
+    },
+    "埼玉県": {
+      "site_code": 10,
+      "total_listed": 379,
+      "pages": 10,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=10",
+      "fetched_at": "2026-10-30T12:57:02+09:00"
+    },
+    "千葉県": {
+      "site_code": 11,
+      "total_listed": 375,
+      "pages": 10,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=11",
+      "fetched_at": "2026-10-30T12:57:35+09:00"
+    },
+    "茨城県": {
+      "site_code": 12,
+      "total_listed": 189,
+      "pages": 5,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=12",
+      "fetched_at": "2026-10-30T12:58:08+09:00"
+    },
+    "栃木県": {
+      "site_code": 13,
+      "total_listed": 142,
+      "pages": 4,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=13",
+      "fetched_at": "2026-10-30T12:58:22+09:00"
+    },
+    "群馬県": {
+      "site_code": 14,
+      "total_listed": 145,
+      "pages": 4,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=14",
+      "fetched_at": "2026-10-30T12:58:33+09:00"
+    },
+    "山梨県": {
+      "site_code": 15,
+      "total_listed": 111,
+      "pages": 3,
+      "first_url": "https://ghostmap.jp/spotlist.php?precd=15",
+      "fetched_at": "2026-10-30T12:58:43+09:00"
+    }
+  }
+}

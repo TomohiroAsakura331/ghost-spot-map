@@ -1,45 +1,40 @@
+"""Authenticated viewer for the frozen STEP 5.8 research results."""
 import hmac
-from pathlib import Path
+import os
 
 import pandas as pd
 import streamlit as st
-import streamlit.components.v1 as components
 
-from map3d.render import DATA as MAP3D_DATA
-from map3d.render import build_map3d_html
-from step5map.render import DATA as STEP5_DATA
-from step5map.render import build_step5_html
+from s58viz.data import PREFS, ROOT, filter_table, read_table
+from s58viz.render import build
+from s58viz.research import research_page, sources_page
 
-st.set_page_config(
-    page_title="心霊スポット分析",
-    layout="wide"
-)
-
-BASE_DIR = Path(__file__).parent
+st.set_page_config(page_title="E58｜心霊スポットの環境分析", page_icon="◈", layout="wide")
 
 
 def check_password():
     if st.session_state.get("authenticated", False):
         return True
-
-    st.title("心霊スポット分析")
-    st.write("閲覧するにはパスワードを入力してください。")
-
-    password = st.text_input(
-        "パスワード",
-        type="password"
-    )
-
-    if st.button("ログイン"):
-        if hmac.compare_digest(
-            password,
-            st.secrets["APP_PASSWORD"]
-        ):
+    st.title("E58｜心霊スポットの環境分析")
+    st.caption("STEP 5.8 · 都県別ランキング上位30% · 2026-10-30")
+    try:
+        expected = st.secrets.get("APP_PASSWORD", "")
+    except FileNotFoundError:
+        expected = ""
+    expected = expected or os.environ.get("APP_PASSWORD", "")
+    if not isinstance(expected, str) or not expected:
+        st.error("閲覧パスワードが未設定です。管理者が APP_PASSWORD を設定してから起動してください。")
+        st.caption("ローカルでは .streamlit/secrets.toml、Streamlit Community Cloud ではアプリ設定の Secrets に設定します。")
+        return False
+    with st.form("login"):
+        password = st.text_input("パスワード", type="password")
+        submitted = st.form_submit_button("ログイン")
+    if submitted:
+        if hmac.compare_digest(password.encode("utf-8"), expected.encode("utf-8")):
             st.session_state.authenticated = True
             st.rerun()
         else:
             st.error("パスワードが違います。")
-
     return False
 
 
@@ -48,148 +43,108 @@ if not check_password():
 
 
 @st.cache_data(show_spinner=False)
-def load_2d_html(path_str: str, mtime: float) -> str:
-    return Path(path_str).read_text(encoding="utf-8")
+def table(name):
+    return read_table(name)
 
 
-@st.cache_data(show_spinner="3D地図を準備しています…")
-def load_3d_html(data_path_str: str, mtime: float) -> str:
-    return build_map3d_html(Path(data_path_str))
+@st.cache_data(show_spinner="E58の地図を準備しています…", max_entries=18)
+def map_html(kind, prefecture, revision):
+    return build(kind, prefecture)
 
 
-@st.cache_data(show_spinner="順位・未登録候補の地図を準備しています…")
-def load_step5_html(data_path_str: str, mtime: float) -> str:
-    return build_step5_html(Path(data_path_str))
+st.sidebar.title("E58 · STEP 5.8")
+page = st.sidebar.radio("ページ", ["概要", "研究詳細", "2D E58マップ", "3D E58マップ", "ランキング・検索", "データ出典"], key="page")
+pref = st.sidebar.selectbox("都県で絞り込み", ["すべて"] + PREFS, key="prefecture")
+st.sidebar.caption("地図・ランキングに適用。E58は全域で算出済みの順位点を保ちます。")
+st.sidebar.caption("正式な採用対象 679件\n\n住居33件は名称・地点を非表示")
+if st.sidebar.button("ログアウト"):
+    st.session_state.clear()
+    st.rerun()
 
+st.title("心霊スポットの環境分析｜E58")
+st.caption("STEP 5.8 正式版 · 1都7県・1kmメッシュ · ランキング取得日 2026-10-30")
+st.info("E58は、都県別ランキング上位30%のスポットの掲載に関連する環境を表す順位点です。心霊体験の発生確率ではありません。同じメッシュのスポットは同じスコアです。")
 
-@st.cache_data(show_spinner=False)
-def load_csv(path_str: str, mtime: float) -> pd.DataFrame:
-    return pd.read_csv(path_str, dtype={"mesh_code": str, "peak_mesh": str, "spot_id": str})
+required = ["e58_map.json.gz", "e58_mesh.csv.gz", "e58_public_spots.csv.gz", "e58_importance.csv", "e58_adoption.csv"]
+missing = [name for name in required if not (ROOT / "data" / name).exists()]
+if missing:
+    st.error("正式版データが不足しています：" + "、".join(missing))
+    st.stop()
 
-
-st.title("心霊スポット総合分析")
-st.caption("17要因に基づく分析結果")
-
-tab_2d, tab_3d, tab_step5 = st.tabs(["2D分析マップ", "3D分析マップ", "既存スポット順位・未登録候補"])
-
-with tab_2d:
-    html_path = BASE_DIR / "composite_report.html"
-    if html_path.exists():
-        components.html(
-            load_2d_html(str(html_path), html_path.stat().st_mtime),
-            height=850,
-            scrolling=True
-        )
+if page == "概要":
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("採用スポット", "679件")
+    c2.metric("E58学習の陽性", "210メッシュ")
+    c3.metric("順位点の基準", "31,303メッシュ")
+    c4.metric("重要度1位", "森林割合")
+    st.subheader("都県ごとに上位30%を採用して再分析")
+    st.write("1都7県の掲載2,252件から、都県別ランキングの上位30%を切り上げて679件採用しました。11環境要因を人口密度・道路密度・都県で調整し、要因を外したときの予測の悪化から重要度を評価しました。")
+    st.success("森林割合は、11要因で唯一、要因を外したときのLogLoss悪化の95%区間が0を上回りました。調整後の寄与は森林4〜6割で高い山型です。")
+    st.write("病院・診療所までの距離が2位、墓地までの距離が3位ですが、森林以外の個別要因は95%区間が0をまたぎます。11要因全体の改善も不確かです。")
+    st.subheader("地図と表の読み方")
+    st.markdown("- **2D**：E58、安定度、11要因・要因群の寄与、採用スポットを重ねて確認。\n- **3D**：柱と曲面でスコアの分布を確認。高さ・平滑化は表示上の操作です。\n- **ランキング・検索**：サイトの都県内順位と、メッシュのE58順位を区別して表示。\n- **研究詳細**：選定、学習方法、森林の結果、E58の定義と限界を確認。")
+    st.caption("図示する32,042メッシュのうち739は保留区画で参考値です。公開リスト646件のうち641件に座標があり、住居33件と座標不明5件はピン表示しません。")
+elif page == "研究詳細":
+    research_page(table)
+elif page in {"2D E58マップ", "3D E58マップ"}:
+    kind = "2d" if page.startswith("2D") else "3d"
+    st.subheader(f"{kind.upper()} E58マップ｜{pref}")
+    if kind == "3d":
+        st.warning("高さはE58スコアの表現です。実地形・標高や発生確率を示しません。曲面は表示のための補間・平滑化で、新しい分析結果ではありません。")
+    st.caption("色はE58の順位帯（3Dの上位1%は黄色）、安定度は15条件で上位5%に入る回数。2Dの寄与表示は青＝押し下げ、橙＝押し上げ。ピンク＝採用スポット、広域代表点は区別して表示します。")
+    try:
+        revision = ((ROOT / f"s58viz/template_{kind}.html").stat().st_mtime_ns, (ROOT / "data/e58_map.json.gz").stat().st_mtime_ns)
+        st.iframe(map_html(kind, pref, revision), height=920, alt=f"{pref}の{kind.upper()} E58環境スコア地図")
+    except (FileNotFoundError, ValueError) as exc:
+        st.error(f"地図を表示できません：{exc}")
+    st.caption("スコアの基準は全域31,303メッシュで固定。都県の選択は表示だけを絞ります。スポットはランキングの都県、メッシュは地理的な所属で絞るため、県境の橋などでは所属が異なることがあります。")
+    st.caption("WebGLとgzip展開に対応したブラウザが必要です。背景地図は初期状態では非表示で、選択時のみ外部タイルを取得します。出典は地図内と「データ出典」に表示しています。")
+elif page == "ランキング・検索":
+    is_public = st.radio("表示対象", ["採用スポット", "メッシュ"], horizontal=True) == "採用スポット"
+    df = table("e58_public_spots.csv.gz" if is_public else "e58_mesh.csv.gz")
+    pcol, mcol = ("都県", "市区町村") if is_public else ("primary_pref", "municipality")
+    regional = df if pref == "すべて" else df[df[pcol].eq(pref)]
+    c1, c2 = st.columns([1, 2])
+    muni = c1.selectbox("市区町村", ["すべて"] + sorted(regional[mcol].dropna().unique().tolist()))
+    query = c2.text_input("検索", placeholder="スポット名・市区町村・メッシュ番号")
+    score_min = st.slider("E58の下限（全域の順位点）", 0, 100, 0)
+    reference = st.checkbox("保留区画の参考値も含める", value=is_public)
+    filtered = filter_table(df, pref, muni, query, score_min, is_public, reference)
+    if is_public:
+        order = st.selectbox("並び順", ["E58が高い順", "サイトの都県内順位"])
+        filtered = filtered.sort_values(["score_E58", "都県内ランキング順位"], ascending=[False, True], na_position="last") if order.startswith("E58") else filtered.sort_values(["都県", "都県内ランキング順位"])
+        columns = ["スポット名", "都県", "市区町村", "カテゴリ", "都県内ランキング順位", "都県内掲載総数", "上位割合（%）", "score_E58", "rank_E58", "1kmメッシュ", "座標の確かさ", "inD", "E58の主な押し上げ要因", "個別ページURL"]
+        st.caption(f"該当 {len(filtered):,}件。正式な採用679件のうち住居33件を除いた646件を検索できます。座標不明5件も表には含みます。サイト順位は都県内の掲載ランキング、E58順位は全域の分析対象メッシュ内の順位です。")
     else:
-        st.error("HTMLファイルが見つかりません。")
-
-with tab_3d:
-    st.info(
-        "本マップは17の立地・環境要因に基づく総合スコアを立体的に可視化したものです。"
-        "高さは心霊体験の実際の発生確率を示すものではありません。"
-    )
-    if MAP3D_DATA.exists():
-        components.html(
-            load_3d_html(str(MAP3D_DATA), MAP3D_DATA.stat().st_mtime),
-            height=860,
-            scrolling=False
-        )
-        st.caption(
-            "対象範囲は既存分析と同じ首都圏（1都7県・東京都島しょ）の1kmメッシュです。"
-            "スコア・順位は composite_report.html / mesh_composite.csv の既存値をそのまま表示しており、"
-            "高さ倍率・強調・平滑化は見た目だけを変えます。"
-        )
-    else:
-        st.error("3D地図データ（data/map3d_data.json.gz）が見つかりません。")
-
-with tab_step5:
-    st.info(
-        "既存の心霊スポットを2つの評価で順位づけし、同じ評価で「まだ掲載のない高スコア地域」を示します。"
-        "A＝空間交差検証で検証した掲載傾向モデル、B＝H1（仮説の向き・等重みの探索的立地条件）で、AとBは混ぜていません。"
-        "どちらも心霊体験の発生確率ではなく、未登録は「心霊スポットがない」ことを意味しません。"
-    )
-    if STEP5_DATA.exists():
-        components.html(
-            load_step5_html(str(STEP5_DATA), STEP5_DATA.stat().st_mtime),
-            height=880,
-            scrolling=False
-        )
-        st.caption(
-            "柱の高さはスコアの3乗×倍率（上位を強調）で、見やすさのための表示です。標高や確率ではありません。"
-            "地図右上の一覧から地点・地域を選ぶと、主な要因と注意点を表示します。"
-        )
-    else:
-        st.error("STEP 5 の地図データ（data/step5_map_data.json.gz）が見つかりません。")
-
-    spots_path = BASE_DIR / "data" / "step5_existing_spots_ranking.csv"
-    cands_path = BASE_DIR / "data" / "step5_unregistered_candidates.csv"
-    if spots_path.exists() and cands_path.exists():
-        spots = load_csv(str(spots_path), spots_path.stat().st_mtime)
-        cands = load_csv(str(cands_path), cands_path.stat().st_mtime)
-
-        st.subheader("表で見る")
-        c1, c2, c3 = st.columns(3)
-        pref = c1.selectbox("都県", ["（すべて）"] + sorted(spots.primary_pref.dropna().unique()), key="s5_pref")
-        munis = spots if pref == "（すべて）" else spots[spots.primary_pref == pref]
-        muni = c2.selectbox("市区町村", ["（すべて）"] + sorted(munis.municipality.dropna().unique()), key="s5_muni")
-        order = c3.radio("並び順", ["A 掲載傾向", "B 立地条件（H1）"], horizontal=True, key="s5_order")
-
-        t_spots, t_cands = st.tabs(["既存スポットの順位", "未登録の高スコア地域"])
-        with t_spots:
-            kinds = st.multiselect(
-                "種類", ["具体的地点", "広域代表点（山・公園など）", "位置要確認", "位置不明（評価不可）"],
-                default=["具体的地点"], key="s5_kinds"
-            )
-            t = spots[spots.spot_type.isin(kinds)]
-            if pref != "（すべて）":
-                t = t[t.primary_pref == pref]
-            if muni != "（すべて）":
-                t = t[t.municipality == muni]
-            t = t.sort_values("rank_B" if order.startswith("B") else "rank_A", na_position="last")
-            st.caption(
-                f"{len(t):,}件。順位は全スポット中の順位で、同じ1kmメッシュは同点。"
-                "A順位(最良〜最悪)＝交差検証の分け方3通りでの幅、B(最小〜最大)＝重み45通りでの幅。"
-            )
-            st.dataframe(
-                t.rename(columns={
-                    "rank_A": "A順位", "rank_A_best_of_3splits": "A順位(最良)", "rank_A_worst_of_3splits": "A順位(最悪)",
-                    "rank_B": "B順位", "name": "名称", "genre": "カテゴリ", "spot_type": "種類", "address": "所在地",
-                    "primary_pref": "都県", "municipality": "市区町村", "score_A_listing_tendency": "A",
-                    "score_A_baseline_model": "A(基準モデル)", "A_neighbourhood_mean": "A(周辺9区画平均)",
-                    "score_B_H1_location": "B", "score_B_low_under_45_weight_sets": "B(最小)",
-                    "score_B_high_under_45_weight_sets": "B(最大)", "main_factors_A": "Aの主な要因",
-                    "lowering_factors_A": "Aを下げた要因", "main_factors_B": "Bの主な要因",
-                    "auxiliary_records": "補助記録", "caveats": "評価上の注意", "source_url": "掲載元",
-                }),
-                use_container_width=True, hide_index=True, height=460,
-                column_config={"掲載元": st.column_config.LinkColumn("掲載元")},
-            )
-            st.download_button("この表をCSVで保存", t.to_csv(index=False).encode("utf-8-sig"),
-                               file_name="existing_spots_ranking_filtered.csv", mime="text/csv", key="s5_dl1")
-        with t_cands:
-            cset = st.radio(
-                "抽出方法", ["全域A上位1%", "都県内A上位1%", "B（H1）上位1%"], horizontal=True, key="s5_cset",
-                help="全域＝首都圏全体での順位、都県内＝同じ予測値を都県ごとに並べ直した順位、B＝参考（仮説スコア）"
-            )
-            k = cands[cands.candidate_set == cset]
-            if pref != "（すべて）":
-                k = k[k.prefecture.str.contains(pref, regex=False)]
-            if muni != "（すべて）":
-                k = k[k.municipalities.str.contains(muni, regex=False)]
-            st.caption(f"{len(k):,}地域（隣接する高スコア区画を1地域に統合）。未登録＝心霊スポットがない、ではありません。")
-            st.dataframe(
-                k.rename(columns={
-                    "rank": "順位", "area_id": "地域ID", "n_meshes": "区画数", "prefecture": "都県", "municipalities": "市区町村",
-                    "peak_mesh": "頂点メッシュ", "peak_lat": "緯度", "peak_lon": "経度", "peak_score": "頂点スコア",
-                    "peak_score_A_overall": "A(全域)", "peak_score_A_within_pref": "A(都県内)", "peak_score_B_H1": "B",
-                    "split_pct_min": "A分け方最小", "split_pct_max": "A分け方最大", "main_factors_A": "Aの主な要因",
-                    "main_factors_B": "Bの主な要因", "nearest_listed": "最寄りの既存スポット", "nearest_listed_km": "距離km",
-                    "similar_existing_spot_meshes": "立地が似た既存スポット", "why_unregistered": "未登録と判断した根拠",
-                    "uncertainty": "不確実性",
-                }),
-                use_container_width=True, hide_index=True, height=460,
-            )
-            st.download_button("この表をCSVで保存", k.to_csv(index=False).encode("utf-8-sig"),
-                               file_name="unregistered_candidates_filtered.csv", mime="text/csv", key="s5_dl2")
-    else:
-        st.error("STEP 5 の表データ（data/step5_*.csv）が見つかりません。")
+        filtered = filtered.sort_values("score_E58", ascending=False)
+        columns = ["mesh_code", "primary_pref", "municipality", "stratum3", "score_E58", "rank_E58", "E58安定度_上位5パーセント", "inD", "n_top30", "hidden_residences", "E58の主な押し上げ要因"]
+        st.caption(f"該当 {len(filtered):,}メッシュ。保留区画は学習に使わない参考値で、E58順位を付けていません。")
+    labels = {"score_E58": "E58（順位点）", "rank_E58": "全域E58メッシュ順位", "mesh_code": "メッシュ", "primary_pref": "都県", "municipality": "市区町村", "stratum3": "地域区分", "inD": "分析対象（Falseは参考値）", "hidden_residences": "非表示の住居件数", "n_top30": "採用スポット数"}
+    shown = filtered[columns].rename(columns=labels)
+    st.dataframe(shown, hide_index=True, width="stretch", height=440, column_config={"個別ページURL": st.column_config.LinkColumn("掲載元"), "E58（順位点）": st.column_config.NumberColumn(format="%.2f")})
+    st.download_button("表示中の表をCSVで保存", shown.to_csv(index=False).encode("utf-8-sig"), file_name="e58_filtered.csv", mime="text/csv")
+    st.caption("安定度は15条件のうち上位5%に入った割合（%）です。サイト順位・E58順位とも表示の絞り込みでは再計算しません。")
+    if len(filtered):
+        st.subheader("1kmメッシュの要因寄与")
+        options = filtered.index[:200].tolist()
+        if len(filtered) > 200:
+            st.caption("詳細選択は表示順の先頭200件です。市区町村や検索で対象を絞り込めます。")
+        def label(index):
+            row = filtered.loc[index]
+            return f"{row['スポット名']}｜{row['都県']} {row['市区町村']}" if is_public else f"{row['mesh_code']}｜{row['primary_pref']} {row['municipality']}"
+        selected = st.selectbox("詳細を見る対象", options, format_func=label)
+        row = filtered.loc[selected]
+        if pd.isna(row.score_E58):
+            st.info("この地点は分析対象メッシュ外、または座標不明のため、E58と寄与を表示できません。")
+        else:
+            if not bool(row.inD):
+                st.warning("保留区画の参考値です。学習には使っていません。")
+            if is_public and str(row["座標の確かさ"]).startswith("C"):
+                st.warning("広域代表点です。メッシュのスコアは山・湖・公園などの場所全体を表しません。")
+            from s58viz.research import FACTORS
+            contrib = pd.DataFrame({"要因": [f[0] for f in FACTORS], "寄与（対数オッズ）": [row['cE58_' + f[1]] for f in FACTORS]}).set_index("要因")
+            st.bar_chart(contrib, horizontal=True, sort=False, color="#c4307a")
+            st.dataframe(contrib, width="stretch")
+            st.caption(f"寄与の合計 {contrib.iloc[:, 0].sum():.4f}＝E58の元の値（対数オッズ）{row.E58_logit:.4f}。順位点を足し合わせるものではありません。寄与は因果効果や要因の重要度とは異なり、トンネル・橋の正の寄与も確かな効果を意味しません。")
+else:
+    sources_page()
