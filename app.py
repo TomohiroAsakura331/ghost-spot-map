@@ -103,6 +103,9 @@ elif page == "ランキング・検索":
     is_public = st.radio("表示対象", ["採用スポット", "メッシュ"], horizontal=True) == "採用スポット"
     df = table("e58_public_spots.csv.gz" if is_public else "e58_mesh.csv.gz")
     pcol, mcol = ("都県", "市区町村") if is_public else ("primary_pref", "municipality")
+    if is_public:
+        # Rank once before filtering. Equal mesh scores receive equal ranks.
+        df["E58表示順位"] = df.score_E58.rank(ascending=False, method="min").astype("Int64")
     regional = df if pref == "すべて" else df[df[pcol].eq(pref)]
     c1, c2 = st.columns([1, 2])
     muni = c1.selectbox("市区町村", ["すべて"] + sorted(regional[mcol].dropna().unique().tolist()))
@@ -113,17 +116,18 @@ elif page == "ランキング・検索":
     if is_public:
         order = st.selectbox("並び順", ["E58が高い順", "サイトの都県内順位"])
         filtered = filtered.sort_values(["score_E58", "都県内ランキング順位"], ascending=[False, True], na_position="last") if order.startswith("E58") else filtered.sort_values(["都県", "都県内ランキング順位"])
-        columns = ["スポット名", "都県", "市区町村", "カテゴリ", "都県内ランキング順位", "都県内掲載総数", "上位割合（%）", "score_E58", "rank_E58", "1kmメッシュ", "座標の確かさ", "inD", "E58の主な押し上げ要因", "個別ページURL"]
+        columns = ["E58表示順位", "スポット名", "score_E58", "都県", "市区町村", "カテゴリ", "都県内ランキング順位", "都県内掲載総数", "上位割合（%）", "rank_E58", "1kmメッシュ", "座標の確かさ", "inD", "E58の主な押し上げ要因", "個別ページURL"]
         st.caption(f"該当 {len(filtered):,}件。正式な採用679件のうち住居33件を除いた646件を検索できます。座標不明5件も表には含みます。サイト順位は都県内の掲載ランキング、E58順位は全域の分析対象メッシュ内の順位です。")
+        st.caption(f"左端の順位は、E58のある公開スポット{df.score_E58.notna().sum():,}件のスコア順です。保留区画の参考値も含み、同点は同順位（次の順位は飛び番）。絞り込みでは再計算しません。スコアがない地点は順位も空欄です。")
     else:
         filtered = filtered.sort_values("score_E58", ascending=False)
-        columns = ["mesh_code", "primary_pref", "municipality", "stratum3", "score_E58", "rank_E58", "E58安定度_上位5パーセント", "inD", "n_top30", "hidden_residences", "E58の主な押し上げ要因"]
+        columns = ["rank_E58", "mesh_code", "score_E58", "primary_pref", "municipality", "stratum3", "E58安定度_上位5パーセント", "inD", "n_top30", "hidden_residences", "E58の主な押し上げ要因"]
         st.caption(f"該当 {len(filtered):,}メッシュ。保留区画は学習に使わない参考値で、E58順位を付けていません。")
-    labels = {"score_E58": "E58（順位点）", "rank_E58": "全域E58メッシュ順位", "mesh_code": "メッシュ", "primary_pref": "都県", "municipality": "市区町村", "stratum3": "地域区分", "inD": "分析対象（Falseは参考値）", "hidden_residences": "非表示の住居件数", "n_top30": "採用スポット数"}
+    labels = {"E58表示順位": "順位", "score_E58": "E58スコア（0〜100）", "rank_E58": "全域E58メッシュ順位", "mesh_code": "メッシュ", "primary_pref": "都県", "municipality": "市区町村", "stratum3": "地域区分", "inD": "分析対象（Falseは参考値）", "hidden_residences": "非表示の住居件数", "n_top30": "採用スポット数"}
     shown = filtered[columns].rename(columns=labels)
-    st.dataframe(shown, hide_index=True, width="stretch", height=440, column_config={"個別ページURL": st.column_config.LinkColumn("掲載元"), "E58（順位点）": st.column_config.NumberColumn(format="%.2f")})
+    st.dataframe(shown, hide_index=True, width="stretch", height=440, column_config={"個別ページURL": st.column_config.LinkColumn("掲載元"), "順位": st.column_config.NumberColumn("順位", format="%d", width="small", help="E58のある公開スポット全体でのスコア順。同点は同順位で、絞り込みでも維持します。"), "全域E58メッシュ順位": st.column_config.NumberColumn(format="%d"), "E58スコア（0〜100）": st.column_config.NumberColumn("E58スコア（0〜100）", format="%.2f", width="medium", help="全域の分析対象31,303メッシュ内の順位点。心霊体験の発生確率ではありません。")})
     st.download_button("表示中の表をCSVで保存", shown.to_csv(index=False).encode("utf-8-sig"), file_name="e58_filtered.csv", mime="text/csv")
-    st.caption("安定度は15条件のうち上位5%に入った割合（%）です。サイト順位・E58順位とも表示の絞り込みでは再計算しません。")
+    st.caption("E58スコアは0〜100の順位点です。安定度は15条件のうち上位5%に入った割合（%）。サイト順位・スポット順位・全域メッシュ順位はいずれも絞り込みでは再計算しません。")
     if len(filtered):
         st.subheader("1kmメッシュの要因寄与")
         options = filtered.index[:200].tolist()
